@@ -30,3 +30,13 @@ async def approve_payment(user_id: int) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=button)
 
     return keyboard
+
+
+async def approve_payment_timeout(user_id: int) -> InlineKeyboardMarkup:
+    button = [
+        [InlineKeyboardButton(text='Написать сообщение', callback_data=f'answerBook_{user_id}')]
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=button)
+
+    return keyboard

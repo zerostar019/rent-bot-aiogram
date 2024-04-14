@@ -50,7 +50,7 @@ class Database:
             raise BaseException("Error")
 
 
-    async def register_buy(self, user_id: int, date: str, time: str) -> Union[int, str]:
+    async def register_buy(self, user_id: int, date: str, rent_start: int, rent_end: int) -> Union[int, str]:
         """
             Обновление базы данных с покупками
         """
@@ -58,8 +58,8 @@ class Database:
             await self.__connect()
             async with self.__conn as conn:
                 async with conn.cursor() as cur:
-                    await cur.execute("INSERT INTO buys(user_id, date, time, status) "
-                                      "VALUES(%s, %s, %s, %s)", (user_id, date, time, 0))
+                    await cur.execute("INSERT INTO bookings(user_id, date, rent_start, rent_end, status) "
+                                      "VALUES(%s, %s, %s, %s, %s)", (user_id, date, rent_start, rent_end, 0))
                     await conn.commit()
                     return int(cur.rowcount)
         except Exception as e:
@@ -67,7 +67,7 @@ class Database:
             raise BaseException("Error")
 
 
-    async def update_booking_status(self, user_id: int, date: str, time: str) -> Union[int, str]:
+    async def update_booking_status(self, user_id: int, date: str, rent_start: int, rent_end: int) -> Union[int, str]:
         """
             Обновление статуса бронирования
         """
@@ -75,7 +75,42 @@ class Database:
             await self.__connect()
             async with self.__conn as conn:
                 async with conn.cursor() as cur:
-                    await cur.execute("UPDATE buys SET status = 1 WHERE user_id = %s AND date = %s AND time = %s", (user_id, date, time))
+                    await cur.execute("UPDATE bookings SET status = 1 WHERE user_id = %s AND date = %s AND rent_start = %s AND rent_end = %s", (user_id, date, rent_start, rent_end))
+                    await conn.commit()
+                    return int(cur.rowcount)
+        except Exception as e:
+            print(e)
+            raise BaseException("Error")
+        
+
+    async def get_booking_status(self, user_id: int, date: str, rent_start: int, rent_end: int) -> Union[int, str]:
+        """
+            Получение статуса бронирования
+        """
+        try:
+            await self.__connect()
+            async with self.__conn as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("SELECT status FROM bookings WHERE user_id = %s AND date = %s AND rent_start = %s AND rent_end = %s", (user_id, date, rent_start, rent_end))
+                    result = await cur.fetchone()
+                    if result is None:
+                        return None
+                    else:
+                        return int(result[0])
+        except Exception as e:
+            print(e)
+            raise BaseException("Error")
+        
+    
+    async def delete_booking(self, user_id: int, date: str, rent_start: int, rent_end: int) -> Union[int, str]:
+        """
+            Удаление бронирования
+        """
+        try:
+            await self.__connect()
+            async with self.__conn as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("DELETE FROM bookings WHERE user_id = %s AND date = %s AND rent_start = %s AND rent_end = %s", (user_id, date, rent_start, rent_end))
                     await conn.commit()
                     return int(cur.rowcount)
         except Exception as e:

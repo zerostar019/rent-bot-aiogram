@@ -14,7 +14,7 @@ from bot.redis_instance import redis
 from bot.bot_instance import bot
 from config import env
 from handlers.start import start
-
+from scheduler import scheduler
 
 dp = Dispatcher(storage=RedisStorage(redis))
 dp.include_router(start)
@@ -24,6 +24,7 @@ BOT_PATH = '/bot_updates'
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Turn on the bot
+    scheduler.start()
     await bot.set_webhook(
         url=str(env.HOST.get_secret_value()) + BOT_PATH,
         allowed_updates=['callback_query',
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Turn off the bot
+    scheduler.shutdown()
     await bot.session.close()
     await bot.delete_webhook(
         drop_pending_updates=True

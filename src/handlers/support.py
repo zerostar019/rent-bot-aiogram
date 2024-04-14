@@ -3,6 +3,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from handlers.keyboard.timepicker import help_menu, return_to_menu, return_to_help_menu
+from handlers.keyboard.support_kb import approve_payment_timeout
 from handlers.keyboard.support_kb import (
     create_support_button,
     cancel_enter
@@ -25,7 +26,7 @@ class AnswerRoom(StatesGroup):
 
 support = Router()
 
-CHAT_ID = '-4137378938'
+CHAT_ID = '-4190920965'
 
 
 SUPPORT_TEXT = 'ℹ️ Администратор ответит Вам в ближайшее время!\n\nПожалуйста, напишите Ваш вопрос👇'
@@ -89,6 +90,10 @@ async def deny_answer_admin(callback: CallbackQuery, state: FSMContext):
 
 
 @support.callback_query(F.data.startswith('user'))
+async def start_answer_question_2(callback: CallbackQuery, state: FSMContext):
+    await start_answer_question(callback, state)
+
+@support.callback_query(F.data.startswith('answerBook'))
 async def start_answer_question(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     user_id = callback.data.split('_')[1]
@@ -116,21 +121,20 @@ async def process_payment_admin(callback: CallbackQuery):
     try:
         # Ответ администратора при успешной операции бронирования 
         await callback.answer()
-        user_id = int(callback.data.split('_')[1])
+        message_data = callback.data.split('_')
+        user_id = int(message_data[1])
         reserve_details = callback.message.text.split('#')[1].split('_')
         date = reserve_details[1]
-        times = '_'.join(reserve_details[2:])
-        await db.update_booking_status(user_id=int(user_id), date=date, time=times)
+        rent_start = reserve_details[2]
+        rent_end = reserve_details[3]
+        await db.update_booking_status(user_id=int(user_id), date=date, rent_start=rent_start, rent_end=rent_end)
+        keyboard = await approve_payment_timeout(user_id=user_id)
+        await callback.message.edit_reply_markup(inline_message_id=callback.inline_message_id, reply_markup=keyboard)
         text = '✅ Ваша бронь успешно оплачена. Ожидайте, пожалуйста, дальнейших действий от Администратора!'
         text += '\n\nДля обращения к Администратору, просто напишите любое сообщение боту!'
         await bot.send_message(chat_id=user_id, text=text)
     except AiogramError as e:
         print(e)
-
-
-@support.callback_query(F.data.startswith('answerBook'))
-async def booking_answer_admin(callback: CallbackQuery, state: FSMContext):
-    pass
 
 
 @support.message(F.chat.func(lambda chat: chat.id == int(CHAT_ID)), AnswerRoom.answer)

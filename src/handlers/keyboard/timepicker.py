@@ -1,18 +1,34 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from typing import List
 from datetime import datetime
 
 
-async def create_timepicker(is_today: bool = False) -> InlineKeyboardMarkup:
-    start = 0
-    if is_today is True:
-        start = datetime.now().hour
+async def create_timepicker(rented_times: List[dict] = [], is_today: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for i in range(start, 24, 1):
-        builder.add(
-            InlineKeyboardButton(
-                text=f'{i}.00-{ i+1 }.00', callback_data=f'time_{i}')
-        )
+    
+    MIN_RENT_HOURS = 3
+    AVAILABLE_HOURS = list(range(0, 24))
+    NOT_AVAILABLE_HOURS = []
+
+    if is_today is True:
+        start = datetime.now().hour + 1
+    else:
+        start = 0
+
+    for rented_time in rented_times:
+        start_time = rented_time.get('rent_start')
+        end_time = rented_time.get('rent_end')
+        for hour in range(start_time, end_time):
+            if hour in AVAILABLE_HOURS:
+                NOT_AVAILABLE_HOURS.append(hour)
+                AVAILABLE_HOURS.remove(hour)
+        
+    for hour in range(start, 24):
+        if hour in AVAILABLE_HOURS and hour + MIN_RENT_HOURS <= 24 and hour + MIN_RENT_HOURS not in NOT_AVAILABLE_HOURS:
+            builder.add(
+                InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}')
+            )
 
     builder.adjust(3)
     builder.row(InlineKeyboardButton(
@@ -20,32 +36,57 @@ async def create_timepicker(is_today: bool = False) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-async def edit_timepicker(data, is_today: bool = False) -> InlineKeyboardMarkup:
-    start = 0
-    if is_today is True:
-        start = datetime.now().hour
+async def edit_timepicker(rented_times: List[dict], start_hour: int | None, end_hour: int | None, is_today: bool = False):
     builder = InlineKeyboardBuilder()
-    for i in range(start, 24, 1):
-        if i in data:
-            builder.add(
-                InlineKeyboardButton(
-                    text=f'✅ {i}.00-{ i+1 }.00', callback_data=f'time_{i}_activated')
-            )
-        else:
-            builder.add(
-                InlineKeyboardButton(
-                    text=f'{i}.00-{ i+1 }.00', callback_data=f'time_{i}')
-            )
+    
+    MIN_RENT_HOURS = 3
+    AVAILABLE_HOURS = list(range(0, 24))
+    NOT_AVAILABLE_HOURS = []
 
-    sum = len(data) * 1000
+    if is_today is True:
+        start = datetime.now().hour + 1
+    else:
+        start = 0
+
+    for rented_time in rented_times:
+        start_time = rented_time.get('rent_start')
+        end_time = rented_time.get('rent_end')
+        for hour in range(start_time, end_time):
+            if hour in AVAILABLE_HOURS:
+                NOT_AVAILABLE_HOURS.append(hour)
+                AVAILABLE_HOURS.remove(hour)
+
+
+    if end_hour is not None:
+        choosen_range = list(range(start_hour, end_hour + 1))
+    elif start_hour is None:
+        choosen_range = []
+    else:
+        choosen_range = [start_hour]
+        
+    for hour in range(start, 24):
+        if hour in AVAILABLE_HOURS and hour + MIN_RENT_HOURS <= 24 and hour + MIN_RENT_HOURS not in NOT_AVAILABLE_HOURS:
+            if hour in choosen_range:
+                builder.add(
+                    InlineKeyboardButton(text=f'✅ {hour}.00', callback_data=f'hour_{hour}')
+            )
+            else:
+                builder.add(
+                    InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}')
+                )
+
+    for_pay = len(choosen_range) * 1000
+
     builder.adjust(3)
-    if len(data) > 2:
-        times = '_'.join(str(element) for element in data)
-        builder.row(InlineKeyboardButton(
-            text=f'💸 К оплате {sum} руб.', callback_data=f'pay_{sum}_{times}'))
+    if len(choosen_range) >= 2:
+        builder.row(
+            InlineKeyboardButton(
+                text=f'К оплате {for_pay} руб.',
+                callback_data=f'pay_{for_pay}'
+            )
+        )
     builder.row(InlineKeyboardButton(
         text='⬅️ Назад', callback_data='pick_date'))
-
     return builder.as_markup()
 
 
