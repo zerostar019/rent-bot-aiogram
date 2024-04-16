@@ -2,7 +2,7 @@ import aiomysql
 
 # Типизация
 from pymysql.err import IntegrityError
-from typing import Union
+from typing import Union, List
 
 # Дополнительные импорты и Redis
 from config import env
@@ -116,5 +116,30 @@ class Database:
         except Exception as e:
             print(e)
             raise BaseException("Error")
+        
+
+    async def get_bookings_a_day(self, date: str) -> Union[List]:
+        try:
+            await self.__connect()
+            async with self.__conn as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute('SELECT rent_start, rent_end FROM bookings WHERE date = %s', (date,))
+                    result = await cur.fetchall()
+                    if result is None:
+                        return None
+                    else:
+                        res = []
+                        if len(result) > 0:
+                            for k, v in result:
+                                res.append({
+                                    'rent_start': k,
+                                    'rent_end': v
+                                })
+                            return res
+                        return []
+        except Exception as e:
+            print(e)
+            raise BaseException("Error")
+            
 
 db = Database()

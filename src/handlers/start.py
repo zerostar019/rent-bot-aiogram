@@ -22,6 +22,7 @@ from handlers.support import support
 
 class UserBuy(StatesGroup):
     date = State()
+    db_date = State()
     start_hour = State()
     end_hour = State()
 
@@ -68,12 +69,21 @@ async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallba
             await start_bot(message=callback.message, fl='calendar_start')
             return
         elif button_type == 'TODAY':
-            timepicker = await create_timepicker(is_today=True, rented_times=[])
+            date = datetime.now().date()
+            rented_times = await db.get_bookings_a_day(date=date)
+            timepicker = await create_timepicker(is_today=True, rented_times=rented_times)
+            if timepicker[1] == 0:
+                await callback.message.edit_text(
+                    text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
+                    reply_markup=timepicker[0]
+                )
+                return
+            await state.update_data(db_date=str(date))
             date = datetime.now().strftime("%d.%m.%Y")
             await state.update_data(date=date)
             await callback.message.edit_text(
-                f'▶️ Вы выбрали дату: <b>{date}</b>\nВыберите временной диапазон:',
-                reply_markup=timepicker,
+                f'▶️ Вы выбрали дату: <b>{date}</b>\n\n⏳ Выберите временной диапазон:',
+                reply_markup=timepicker[0],
                 parse_mode="HTML"
             )
             return
@@ -82,23 +92,34 @@ async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallba
         )
         selected, date = await calendar.process_selection(callback, callback_data)
         if date:
+            await state.update_data(db_date=str(date))
+            rented_times = await db.get_bookings_a_day(date=date)
             date = date.strftime("%d.%m.%Y")
             date_now = datetime.now().strftime("%d.%m.%Y")
-            timepicker = await create_timepicker(rented_times=[
-                {"rent_start": 19, "rent_end": 23},
-                {"rent_start": 1, "rent_end": 4}
-                ])
             if date.strip() == date_now.strip():
                 timepicker = await create_timepicker(is_today=True)
+                if timepicker[1] == 0:
+                    await callback.message.edit_text(
+                    text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
+                    reply_markup=timepicker[0]
+                )
+                    return
             if date < date_now:
                 await callback.answer('Невозможно забронировать в данный день!')
                 await start_signing(callback, state)
                 return
         if selected:
+            timepicker = await create_timepicker(rented_times=rented_times)
+            if timepicker[1] == 0:
+                await callback.message.edit_text(
+                    text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
+                    reply_markup=timepicker[0]
+                )
+                return
             await state.update_data(date=date)
             await callback.message.edit_text(
-                f'▶️ Вы выбрали дату: <b>{date}</b>\nВыберите временной диапазон',
-                reply_markup=timepicker,
+                f'▶️ Вы выбрали дату: <b>{date}</b>\n\n⏳ Выберите временной диапазон:',
+                reply_markup=timepicker[0],
                 parse_mode="HTML"
             )
     except AiogramError as e:
@@ -108,16 +129,13 @@ async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallba
 
 @start.callback_query(F.data.startswith('hour'))
 async def select_hour(callback: CallbackQuery, state: FSMContext):
-    rented_times=[
-                {"rent_start": 19, "rent_end": 23},
-                {"rent_start": 1, "rent_end": 4}
-                ]
     data = await state.get_data()
-
+    rented_times= await db.get_bookings_a_day(data['db_date'])
     if 'start_hour' in data.keys() and 'end_hour' in data.keys():
         date = data['date']
         await state.clear()
         await state.update_data(date=date)
+        await state.update_data(db_date=data['db_date'])
         start_hour = int(callback.data.split('_')[1])
         await state.update_data(start_hour=start_hour)
         keyboard = await edit_timepicker(
@@ -137,6 +155,7 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
             date = data['date']
             await state.clear()
             await state.update_data(date=date)
+            await state.update_data(db_date=data['db_date'])
             keyboard = await edit_timepicker(
                 rented_times=rented_times,
                 start_hour=None,

@@ -9,31 +9,42 @@ async def create_timepicker(rented_times: List[dict] = [], is_today: bool = Fals
     
     MIN_RENT_HOURS = 3
     AVAILABLE_HOURS = list(range(0, 24))
-    NOT_AVAILABLE_HOURS = []
 
-    if is_today is True:
+    if is_today:
         start = datetime.now().hour + 1
     else:
         start = 0
 
+    not_available_hours = []
     for rented_time in rented_times:
         start_time = rented_time.get('rent_start')
         end_time = rented_time.get('rent_end')
         for hour in range(start_time, end_time):
+            not_available_hours.append(hour)
             if hour in AVAILABLE_HOURS:
-                NOT_AVAILABLE_HOURS.append(hour)
                 AVAILABLE_HOURS.remove(hour)
         
-    for hour in range(start, 24):
-        if hour in AVAILABLE_HOURS and hour + MIN_RENT_HOURS <= 24 and hour + MIN_RENT_HOURS not in NOT_AVAILABLE_HOURS:
-            builder.add(
-                InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}')
-            )
-
-    builder.adjust(3)
-    builder.row(InlineKeyboardButton(
+    if not not_available_hours:  # Если занятых часов нет
+        for hour in range(start, 24):
+            builder.add(InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}'))
+        builder.adjust(3)
+        builder.row(InlineKeyboardButton(
         text='⬅️ Назад', callback_data='pick_date'))
-    return builder.as_markup()
+        return (builder.as_markup(), 1)
+    elif len(not_available_hours) == 23 or len(not_available_hours) == 24:  # Если все часы заняты
+        builder.row(InlineKeyboardButton(text='⬅️ Назад', callback_data='pick_date'))
+        return (builder.as_markup(), 0)
+    else:  # Иначе выводим доступные интервалы
+        for i in range(len(not_available_hours) - 1):
+            if not_available_hours[i] + 1 != not_available_hours[i + 1]:
+                for hour in range(not_available_hours[i] + 1, not_available_hours[i + 1]):
+                    if hour >= start and hour + MIN_RENT_HOURS <= 24:
+                        builder.add(InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}'))
+        builder.adjust(3)
+        builder.row(InlineKeyboardButton(
+        text='⬅️ Назад', callback_data='pick_date'))
+    
+        return (builder.as_markup(), 1)
 
 
 async def edit_timepicker(rented_times: List[dict], start_hour: int | None, end_hour: int | None, is_today: bool = False):
@@ -41,52 +52,57 @@ async def edit_timepicker(rented_times: List[dict], start_hour: int | None, end_
     
     MIN_RENT_HOURS = 3
     AVAILABLE_HOURS = list(range(0, 24))
-    NOT_AVAILABLE_HOURS = []
 
-    if is_today is True:
+    if is_today:
         start = datetime.now().hour + 1
     else:
         start = 0
 
+    not_available_hours = []
     for rented_time in rented_times:
         start_time = rented_time.get('rent_start')
         end_time = rented_time.get('rent_end')
         for hour in range(start_time, end_time):
+            not_available_hours.append(hour)
             if hour in AVAILABLE_HOURS:
-                NOT_AVAILABLE_HOURS.append(hour)
                 AVAILABLE_HOURS.remove(hour)
 
+    rent_time = []
+    if start_hour is not None:
+        if end_hour is not None:
+            for i in range(start_hour, end_hour + 1):
+                rent_time.append(i)
+        else:
+            rent_time = [start_hour]
 
-    if end_hour is not None:
-        choosen_range = list(range(start_hour, end_hour + 1))
-    elif start_hour is None:
-        choosen_range = []
-    else:
-        choosen_range = [start_hour]
+    total_price = len(rent_time) * 1000
         
-    for hour in range(start, 24):
-        if hour in AVAILABLE_HOURS and hour + MIN_RENT_HOURS <= 24 and hour + MIN_RENT_HOURS not in NOT_AVAILABLE_HOURS:
-            if hour in choosen_range:
-                builder.add(
-                    InlineKeyboardButton(text=f'✅ {hour}.00', callback_data=f'hour_{hour}')
-            )
+    if not not_available_hours:  
+        for hour in range(start, 24):
+            if hour in rent_time:
+                builder.add(InlineKeyboardButton(text=f'✅ {hour}.00', callback_data=f'hour_{hour}'))
             else:
-                builder.add(
-                    InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}')
-                )
+                builder.add(InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}'))
+        builder.adjust(3)
+        if len(rent_time) >= MIN_RENT_HOURS:
+            builder.row(InlineKeyboardButton(text=f'💸 К оплате {total_price} руб.', callback_data=f'pay_{total_price}'))
+        builder.row(InlineKeyboardButton(text='⬅️ Назад', callback_data='pick_date'))
+    elif len(not_available_hours) == 24:  
+        builder.row(InlineKeyboardButton(text='⬅️ Назад', callback_data='pick_date'))
+    else:  
+        for i in range(len(not_available_hours) - 1):
+            if not_available_hours[i] + 1 != not_available_hours[i + 1]:
+                for hour in range(not_available_hours[i] + 1, not_available_hours[i + 1]):
+                    if hour >= start and hour + MIN_RENT_HOURS <= 24:
+                        if hour in rent_time:
+                            builder.add(InlineKeyboardButton(text=f'✅ {hour}.00', callback_data=f'hour_{hour}'))
+                        else:
+                            builder.add(InlineKeyboardButton(text=f'{hour}.00', callback_data=f'hour_{hour}'))
+        builder.adjust(3)
+        if len(rent_time) >= MIN_RENT_HOURS:
+            builder.row(InlineKeyboardButton(text=f'💸 К оплате {total_price} руб.', callback_data=f'pay_{total_price}'))
+        builder.row(InlineKeyboardButton(text='⬅️ Назад', callback_data='pick_date'))
 
-    for_pay = len(choosen_range) * 1000
-
-    builder.adjust(3)
-    if len(choosen_range) >= 2:
-        builder.row(
-            InlineKeyboardButton(
-                text=f'К оплате {for_pay} руб.',
-                callback_data=f'pay_{for_pay}'
-            )
-        )
-    builder.row(InlineKeyboardButton(
-        text='⬅️ Назад', callback_data='pick_date'))
     return builder.as_markup()
 
 
