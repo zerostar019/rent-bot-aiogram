@@ -11,7 +11,10 @@ from handlers.keyboard.support_kb import (
 from bot.bot_instance import bot
 from database.database import db
 from aiogram.exceptions import AiogramError
-
+from scheduler import scheduler
+from datetime import timedelta
+from datetime import datetime
+from convert_time import convert_time
 
 class UserQuery(StatesGroup):
     user_id = State()
@@ -133,8 +136,20 @@ async def process_payment_admin(callback: CallbackQuery):
         text = '✅ Ваша бронь успешно оплачена. Ожидайте, пожалуйста, дальнейших действий от Администратора!'
         text += '\n\nДля обращения к Администратору, просто напишите любое сообщение боту!'
         await bot.send_message(chat_id=user_id, text=text)
+        run_date = await convert_time(date=date, hour=rent_end)
+        job_args = (user_id,)
+        scheduler.add_job(send_review_message, 'date', run_date=run_date, args=job_args)
     except AiogramError as e:
         print(e)
+
+
+async def send_review_message(chat_id: int):
+    try:
+        text = 'Спасибо, что выбрали БДСМ Апартаменты «Nonstop». Мы всегда работаем над нашим сервисом и прислушиваемся к пожеланиям наших гостей. Всё ли вам понравилось?'
+        await bot.send_message(chat_id=chat_id, text=text)
+    except Exception as e:
+        print(e)
+        pass
 
 
 @support.message(F.chat.func(lambda chat: chat.id == int(CHAT_ID)), AnswerRoom.answer)

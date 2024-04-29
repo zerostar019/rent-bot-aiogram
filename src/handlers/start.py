@@ -9,6 +9,7 @@ from database.database import db
 from bot.bot_instance import bot
 from aiogram.exceptions import AiogramError
 from scheduler import scheduler
+from datetime import date as dt
 
 
 # FSM
@@ -25,6 +26,7 @@ class UserBuy(StatesGroup):
     db_date = State()
     start_hour = State()
     end_hour = State()
+    sum_ = State()
 
 
 start = Router()
@@ -64,6 +66,7 @@ async def start_signing(callback: CallbackQuery, state: FSMContext):
 @start.callback_query(SimpleCalendarCallback.filter())
 async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallback, state: FSMContext):
     try:
+        await callback.answer()
         button_type = callback.data.split(':')[1]
         if button_type == "CANCEL":
             await start_bot(message=callback.message, fl='calendar_start')
@@ -90,38 +93,45 @@ async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallba
         calendar = SimpleCalendar(
             locale=await get_user_locale(callback.from_user), show_alerts=True, cancel_btn='Назад', today_btn='Сегодня'
         )
-        selected, date = await calendar.process_selection(callback, callback_data)
-        if date:
-            await state.update_data(db_date=str(date))
-            rented_times = await db.get_bookings_a_day(date=date)
-            date = date.strftime("%d.%m.%Y")
+        selected, date_ = await calendar.process_selection(callback, callback_data)
+        if date_:
+            await state.update_data(db_date=str(date_))
+            rented_times = await db.get_bookings_a_day(date=date_)
+            date_stripped = date_.strftime("%d.%m.%Y")
             date_now = datetime.now().strftime("%d.%m.%Y")
-            if date.strip() == date_now.strip():
-                timepicker = await create_timepicker(is_today=True)
+            today = dt.today()
+            if date_stripped.strip() == date_now.strip():
+                timepicker = await create_timepicker(rented_times=rented_times, is_today=True)
                 if timepicker[1] == 0:
                     await callback.message.edit_text(
                     text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
                     reply_markup=timepicker[0]
                 )
                     return
-            if date < date_now:
+            if date_.date() < today:
                 await callback.answer('Невозможно забронировать в данный день!')
                 await start_signing(callback, state)
                 return
-        if selected:
-            timepicker = await create_timepicker(rented_times=rented_times)
-            if timepicker[1] == 0:
-                await callback.message.edit_text(
-                    text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
-                    reply_markup=timepicker[0]
+            if selected:
+                date_now = datetime.now().strftime("%d.%m.%Y")
+                date_ = date_.strftime("%d.%m.%Y")
+                is_today = False
+                if date_stripped.strip() == date_now.strip():
+                    is_today = True
+                timepicker = await create_timepicker(rented_times=rented_times, is_today=is_today)
+                if timepicker[1] == 0:
+                    await callback.message.edit_text(
+                        text='ℹ️ К сожалению, в выбранный день нет доступного времени для бронирования!',
+                        reply_markup=timepicker[0]
                 )
-                return
-            await state.update_data(date=date)
-            await callback.message.edit_text(
-                f'▶️ Вы выбрали дату: <b>{date}</b>\n\n⏳ Выберите временной диапазон:',
-                reply_markup=timepicker[0],
-                parse_mode="HTML"
+                    return
+                await state.update_data(date=date_)
+                await callback.message.edit_text(
+                    f'▶️ Вы выбрали дату: <b>{date_}</b>\n\n⏳ Выберите временной диапазон:',
+                    reply_markup=timepicker[0],
+                    parse_mode="HTML"
             )
+                return
     except AiogramError as e:
         print(e)
         await state.clear()
@@ -131,6 +141,11 @@ async def pick_date(callback: CallbackQuery, callback_data: SimpleCalendarCallba
 async def select_hour(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     rented_times= await db.get_bookings_a_day(data['db_date'])
+    db_date = data['date']
+    date_now = datetime.now().strftime("%d.%m.%Y")
+    is_today = False
+    if str(db_date).strip() == date_now.strip():
+        is_today = True
     if 'start_hour' in data.keys() and 'end_hour' in data.keys():
         date = data['date']
         await state.clear()
@@ -141,7 +156,8 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
         keyboard = await edit_timepicker(
             rented_times=rented_times,
             start_hour=start_hour,
-            end_hour=None
+            end_hour=None,
+            is_today=is_today
         )
         await callback.message.edit_reply_markup(
             inline_message_id=callback.inline_message_id,
@@ -159,7 +175,8 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
             keyboard = await edit_timepicker(
                 rented_times=rented_times,
                 start_hour=None,
-                end_hour=None
+                end_hour=None,
+                is_today=is_today
             )
             await callback.message.edit_reply_markup(
                 inline_message_id=callback.inline_message_id,
@@ -173,7 +190,8 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
             keyboard = await edit_timepicker(
                 rented_times=rented_times,
                 start_hour=start_hour,
-                end_hour=end_hour
+                end_hour=end_hour,
+                is_today=is_today
             )
             await callback.message.edit_reply_markup(
                 inline_message_id=callback.inline_message_id,
@@ -185,7 +203,8 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
         keyboard = await edit_timepicker(
             rented_times=rented_times,
             start_hour=start_hour,
-            end_hour=None
+            end_hour=None,
+                is_today=is_today
         )
         await callback.message.edit_reply_markup(
             inline_message_id=callback.inline_message_id,
@@ -197,6 +216,7 @@ async def select_hour(callback: CallbackQuery, state: FSMContext):
 
 @start.callback_query(F.data == 'pick_date')
 async def back_to_calendar(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     await state.clear()
     await start_signing(callback, state)
 
@@ -208,13 +228,14 @@ async def process_payment(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         callback_data = callback.data.split('_')
         payment_sum = callback_data[1]
+        await state.update_data(sum_=payment_sum)
         start_hour = data['start_hour']
         end_hour = data['end_hour']
         text = f'ℹ️ <b>Информация о бронировании:</b>\n\n📆 Дата бронирования: <b>{data["date"]}</b>\n\n🕔 Время бронирования:\n\n'
         text += f' <b>{start_hour}.00 - {end_hour}.00</b>\n\n'
         text += f'Общая стоимость: <i><b>{payment_sum}</b></i> руб.\n\n'
         text += '➡️ Для продолжения, подтвердите бронирование!'
-        keyboard = await approve_reservation()  
+        keyboard = await approve_reservation()
         await callback.message.edit_text(text=text, reply_markup=keyboard, parse_mode="HTML")
     except AiogramError as e:
         print(e)
@@ -241,6 +262,7 @@ async def send_deny_message(message: Message, chat_id: int, date: str, rent_star
 @start.callback_query(F.data == 'approve')
 async def process_approve(callback: CallbackQuery, state: FSMContext):
     try:
+        await callback.answer()
         # Обработка сообщений пользователя и отправка брони в базу данных
         # Получение данных о брони
         data = await state.get_data()
@@ -248,6 +270,7 @@ async def process_approve(callback: CallbackQuery, state: FSMContext):
         date = f'{date[2]}-{date[1]}-{date[0]}'
         rent_start = data['start_hour']
         rent_end = data['end_hour']
+        payment_sum = data['sum_']
 
         user_id = callback.message.chat.id
 
@@ -255,11 +278,11 @@ async def process_approve(callback: CallbackQuery, state: FSMContext):
         keyboard = await approve_payment(user_id=user_id)
         await callback.answer()
         await callback.message.delete_reply_markup(inline_message_id=callback.inline_message_id)
-        await callback.message.answer('👌 Успешное бронирование!\n\n💸 Пожалуйста, внесите оплату в течение 15 минут по указанным реквизитам и ожидайте ответа Администратора!')
+        await callback.message.answer(f'👌 Успешное бронирование!\n\n💸 Пожалуйста, внесите оплату в течение 15 минут по указанным ниже реквизитам и ожидайте ответа Администратора!\n\nСумма к оплате: <b>{payment_sum} руб.</b>\nБанк: <b>Тинькофф</b>\n\nНомер карты: <code>2200701026392016</code>\n\n<i>(Нажмите, чтобы скопировать)</i>', parse_mode='HTML')
         msg = await bot.send_message(chat_id=CHAT_ID, reply_markup=keyboard, text=callback.message.text.replace('➡️ Для продолжения, подтвердите бронирование!', f'#{user_id}_{date}_{rent_start}_{rent_end}'))
         
         # Добавление в базу данных брони пользователя
-        run_date = datetime.now() + timedelta(seconds=10)
+        run_date = datetime.now() + timedelta(minutes=15)
         job_args = (msg, user_id, date, rent_start, rent_end,)
         scheduler.add_job(send_deny_message, 'date', run_date=run_date, args=job_args)
         await db.register_buy(user_id=int(user_id), date=date, rent_start=rent_start, rent_end=rent_end)
