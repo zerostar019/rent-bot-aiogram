@@ -1,0 +1,13 @@
+.login {
+    height: 100dvh;
+    width: 100dvw;
+    display: grid;
+    place-items: center center;
+    background: url('/images/admin-background.webp');
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    &-card {
+        width: 18.75rem;
+    }
+}
