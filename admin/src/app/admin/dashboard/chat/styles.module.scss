@@ -1,0 +1,39 @@
+.chat {
+  max-height: 100%;
+  height: 100%;
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: 16rem 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "users chat";
+
+  &-users {
+    grid-area: users;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 0.625rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  &-users::-webkit-scrollbar {
+    display: none;
+  }
+
+  &-chat {
+    grid-area: chat;
+  }
+}
+
+@media (max-width: 1024px) {
+  .chat-mobile-users {
+    grid-template-columns: 1fr;
+    grid-template-areas: "users";
+  }
+
+  .chat-mobile-chat {
+    grid-template-columns: 1fr;
+    grid-template-areas: "chat";
+  }
+}

@@ -3,7 +3,7 @@ from pydantic import SecretStr
 import pathlib
 
 
-PATH_TO_ENV = str(pathlib.Path(__file__).resolve().parent.parent) + '/.env'
+PATH_TO_ENV = str(pathlib.Path(__file__).resolve().parent.parent) + "/.env"
 
 
 class Environment(BaseSettings):
@@ -11,14 +11,15 @@ class Environment(BaseSettings):
     TOKEN: SecretStr
     PORT: SecretStr
     DB_HOST: SecretStr
-    USER: SecretStr
+    DB_USER: SecretStr
+    DB_PASSWORD: SecretStr
+    DB_NAME: SecretStr
     PASSWORD: SecretStr
     DB: SecretStr
 
-
     class Config:
         env_file = PATH_TO_ENV
-        env_file_encoding = 'utf-8'
+        env_file_encoding = "utf-8"
 
 
 env = Environment()

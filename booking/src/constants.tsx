@@ -1,0 +1,1 @@
+export const BACKEND_URL = "https://p8x86i-91-142-83-218.ru.tuna.am";

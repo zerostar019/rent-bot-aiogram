@@ -1,0 +1,31 @@
+.dashboard-layout {
+  background: url("/images/admin-background.webp");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.dashboard-layout {
+  display: grid;
+  width: 100dvw;
+  max-height: 100dvh;
+  height: 100%;
+  grid-template-columns: 18.75rem 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "sidebar content";
+  padding: 0.625rem;
+  gap: 0.625rem;
+}
+
+.sidebar-position {
+  grid-area: sidebar;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas: "content";
+  }
+  .sidebar-position {
+    display: none;
+  }
+}

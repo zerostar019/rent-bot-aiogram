@@ -1,0 +1,29 @@
+.message {
+  background: #7babd6;
+  color: #fff;
+  max-width: 80%;
+  width: fit-content;
+  border-radius: 0.625rem;
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  height: max-content;
+  min-height: fit-content;
+
+  &-text,
+  &-file {
+    white-space: normal;
+    text-wrap: wrap;
+    word-wrap: break-word;
+  }
+
+  &-right {
+    justify-self: flex-end;
+    align-self: flex-end;
+  }
+
+  &-date {
+    color: #dcdcdc;
+    font-size: 0.6rem;
+  }
+}
