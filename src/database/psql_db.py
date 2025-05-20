@@ -168,7 +168,7 @@ class Database:
         try:
             async with self.acquire_connection() as conn:
                 async with conn.transaction():
-                    deleted_row = await self.conn.execute(
+                    deleted_row = await conn.execute(
                         """
                             DELETE FROM Rental 
                             WHERE id = $1
@@ -355,6 +355,20 @@ class Database:
                         file_id,
                     )
                     return dict(file_path)
+        except Exception as e:
+            print(f"Error fetching file_path: {e}")
+            return None
+
+    async def get_admins(self) -> Union[str, None]:
+        try:
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    admins = await conn.fetch(
+                        """
+                        SELECT * FROM admins;
+                        """,
+                    )
+                    return list(dict(admin)["user_id"] for admin in admins)
         except Exception as e:
             print(f"Error fetching file_path: {e}")
             return None

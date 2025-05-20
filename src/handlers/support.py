@@ -60,7 +60,7 @@ async def process_chatting_with_admin(message: Message):
 
 
 @support.message(F.content_type.in_({"document", "photo", "text"}))
-async def get_bill(message: Message):
+async def get_photo_or_document(message: Message):
     try:
         message_text = ""
         if message.caption is not None:

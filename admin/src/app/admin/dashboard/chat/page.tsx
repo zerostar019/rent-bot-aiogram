@@ -3,12 +3,13 @@ import { Card, notification } from "antd";
 import styles from "./styles.module.scss";
 import ChatUsers from "@/app/components/Pages/Chat/ChatUsers";
 import Chat from "@/app/components/Pages/Chat/Chat";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatUsersInterface } from "@/app/types/Users";
 import classNames from "classnames";
 import useMediaQuery from "@/app/hooks/useMediaQuery";
 import useWebSocket from "@/app/hooks/useWebsocket";
 import { DB_URL } from "@/app/constants";
+import { init, isTMA, viewport } from "@telegram-apps/sdk";
 
 export default function Page() {
   const [selectedUser, setSelectedUser] = useState<
@@ -26,6 +27,31 @@ export default function Page() {
   );
 
   const isMobile = useMediaQuery("(max-width: 1024px)");
+
+  useEffect(() => {
+    const initializeTelegramApp = async () => {
+      if (isTMA()) {
+        try {
+          init();
+          await viewport.mount();
+          if (viewport.expand.isAvailable()) {
+            viewport.expand();
+          }
+        } catch (error) {
+          console.error("Ошибка инициализации Telegram Web App:", error);
+        }
+      } else {
+        console.log("Приложение должно быть запущено внутри Telegram!");
+      }
+    };
+
+    initializeTelegramApp();
+
+    // Очистка при размонтировании
+    return () => {
+      viewport.unmount();
+    };
+  }, []);
 
   return (
     <Card

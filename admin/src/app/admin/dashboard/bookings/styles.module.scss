@@ -1,0 +1,44 @@
+.page-layout {
+  background: #fff;
+  border-radius: 0.625rem;
+  padding: 0.625rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 0.625rem;
+  grid-template-areas:
+    "header"
+    "table";
+  overflow: auto;
+}
+
+.page {
+  &-title {
+    font-size: 1.5rem;
+    font-weight: 500;
+    grid-area: header;
+  }
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    &-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.625rem;
+    }
+  }
+}
+
+.table-layout {
+  grid-area: table;
+}
+
+@media (max-width: 65.625rem) {
+  .page-title {
+    font-size: 1.25rem;
+  }
+}

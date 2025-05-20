@@ -6,7 +6,7 @@ async def start_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="⌚️ Забронировать",
-                web_app=WebAppInfo(url="https://ls06mn-91-142-83-218.ru.tuna.am/"),
+                web_app=WebAppInfo(url="https://zerostar0191.fvds.ru/booking"),
             )
         ],
         [InlineKeyboardButton(text="ℹ️ Получить информацию", callback_data="info")],
@@ -81,3 +81,27 @@ async def attach_bill_kb(booking_id: int) -> InlineKeyboardMarkup:
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=button)
+
+
+async def admin_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="⌚️ Забронировать",
+                web_app=WebAppInfo(url="https://zerostar0191.fvds.ru/booking"),
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💬 Чаты",
+                web_app=WebAppInfo(
+                    url="https://zerostar0191.fvds.ru/admin/admin/dashboard/chat"
+                ),
+            )
+        ],
+        [InlineKeyboardButton(text="ℹ️ Получить информацию", callback_data="info")],
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    return keyboard

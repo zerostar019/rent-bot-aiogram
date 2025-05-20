@@ -26,4 +26,11 @@
     color: #dcdcdc;
     font-size: 0.6rem;
   }
+  &-buttons-layout {
+    margin-top: 0.625rem;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
 }

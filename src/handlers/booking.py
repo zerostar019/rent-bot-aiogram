@@ -9,6 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import pathlib
 from bot.bot_instance import bot
+from bot.ws import manager
 
 PATH_TO_DOCUMENTS = str(pathlib.Path(__file__).resolve().parent.parent) + "/documents/"
 
@@ -59,11 +60,10 @@ async def start_receiving_bill(callback: CallbackQuery, state: FSMContext) -> No
     try:
         # booking_id = int(callback.data.split("_")[-1])
         await callback.answer()
-        print(PATH_TO_DOCUMENTS)
-        # await callback.message.edit_text(
-        #     text=BILL_ATTACH_TEXT,
-        # )
-        # await state.set_state(Bill.bill)
+        await callback.message.edit_text(
+            text=BILL_ATTACH_TEXT,
+        )
+        await state.set_state(Bill.bill)
     except Exception as e:
         print(e)
         await show_error_callback(callback=callback)
@@ -72,24 +72,39 @@ async def start_receiving_bill(callback: CallbackQuery, state: FSMContext) -> No
 @booking.message(Bill.bill, F.content_type.in_({"photo", "document"}))
 async def get_bill(message: Message, state: FSMContext):
     try:
+        message_text = "Пользователь отправил чек на оплату"
         destination = PATH_TO_DOCUMENTS
-
         # Проверка типа файла - документ
+        file_name = ""
+        file_path = ""
         if message.document is not None:
             # Получение названия файла
             file_name = message.document.file_name
-
             # Создание полного пути до документа
             destination += file_name
-
+            file_path = destination
             # Скачивание документа
             await bot.download(file=message.document.file_id, destination=destination)
         elif message.photo is not None:
             # Скачивание файла до destination по имени unique_id
+            file_name = message.photo.pop().file_unique_id + ".jpg"
+            destination += file_name
+            file_path = destination
             await bot.download(
                 file=message.photo[-1],
-                destination=destination + message.photo[-1].file_unique_id + ".jpg",
+                destination=destination,
             )
-            file_name = message.photo[-1].file_unique_id + ".jpg"
+        msg = await db.save_file_from_bot(
+            file_name=file_name,
+            file_path=file_path,
+            user_id=message.chat.id,
+            chat_id=message.chat.id,
+            message_text=message_text,
+        )
+        await message.answer(
+            "Ваше бронирование подтверждено! Ожидайте ответа администратора!"
+        )
+        await manager.broadcast(data=msg)
+        await state.clear()
     except Exception as e:
         print(e)

@@ -72,21 +72,18 @@ const ChatUsers = ({
   useEffect(() => {
     setTimeout(() => scrollDown(), 500);
     if (users && users.length > 0) {
-      const newUsers: ChatUsersInterface[] = [];
-      users.forEach((user) => {
+      const newUsers = users.map((user) => {
         if (user.user_id === selectedUser?.user_id) {
-          newUsers.push({
-            user_id: user.user_id,
-            unread_count: undefined,
-          });
-        } else {
-          newUsers.push({
+          return {
             ...user,
-          });
+            unread_count: 0,
+          };
         }
+        return { ...user };
       });
-      setUsers(newUsers);
-      setFilteredUsers(newUsers);
+      const sortedUsers = sortUsersByUnreadDesc(newUsers);
+      setUsers(sortedUsers);
+      setFilteredUsers(sortedUsers);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser, setSelectedUser]);

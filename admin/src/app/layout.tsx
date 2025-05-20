@@ -1,4 +1,4 @@
-import { AntdRegistry } from "@ant-design/nextjs-registry";
+import Wrapper from "./components/Layout/Wrapper/Wrapper";
 import "./styles/globals.css";
 import "./styles/reset.css";
 import { Metadata, Viewport } from "next";
@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html>
       <body>
-        <AntdRegistry>{children}</AntdRegistry>
+        <Wrapper>{children}</Wrapper>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
-from handlers.keyboard.kb import start_keyboard
+from handlers.keyboard.kb import start_keyboard, admin_keyboard
 from database.psql_db import db
 from aiogram.fsm.context import FSMContext
 from bot.redis_instance import redis
@@ -14,14 +14,17 @@ from constants import GREETING_TEXT
 
 
 start = Router()
-start.include_routers(support, booking)
+start.include_routers(booking, support)
 
 
 @start.message(F.text == "/start")
 async def start_bot(message: Message, state: FSMContext):
     try:
+        admins = await db.get_admins()
         await state.clear()
         keyboard = await start_keyboard()
+        if message.chat.id in admins:
+            keyboard = await admin_keyboard()
         is_registered = await db.check_user_registered(telegram_id=message.chat.id)
         if is_registered is None:
             await db.register_user(telegram_id=message.chat.id)

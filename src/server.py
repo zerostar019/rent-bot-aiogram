@@ -33,6 +33,9 @@ from fastapi import UploadFile, File
 from typing import List
 import shutil
 import pathlib
+from aiogram.fsm.strategy import FSMStrategy
+
+
 
 
 class BookingBody(BaseModel):
@@ -41,8 +44,7 @@ class BookingBody(BaseModel):
     user_id: int
     sum: str
 
-
-dp = Dispatcher(storage=RedisStorage(redis))
+dp = Dispatcher(storage=RedisStorage(redis), fsm_strategy=FSMStrategy.USER_IN_CHAT)
 dp.include_router(start)
 
 UPLOAD_DIR = str(pathlib.Path(__file__).resolve().parent) + "/documents/"
@@ -77,7 +79,7 @@ app.add_middleware(
 )
 
 
-@app.post(BOT_PATH)
+@app.post("/app" + BOT_PATH)
 async def process_bot_updates(update: Update):
     # Process the update from TelegramAPI
     bot_update = Update.model_validate(obj=update, context={"bot": bot})
@@ -85,7 +87,7 @@ async def process_bot_updates(update: Update):
     await dp.feed_update(bot=bot, update=bot_update)
 
 
-@app.websocket("/chat")
+@app.websocket("/app/chat")
 async def process_chat_messages(websocket: WebSocket):
     try:
         await manager.connect(websocket=websocket)
@@ -109,7 +111,7 @@ async def process_chat_messages(websocket: WebSocket):
         await manager.disconnect(websocket=websocket)
 
 
-@app.get("/get-busy")
+@app.get("/app/get-busy")
 async def return_busy_dates(datetime_start: str):
     start_date = datetime.fromtimestamp(int(datetime_start))
     busy_dates = await db.get_booked_days(
@@ -124,7 +126,7 @@ async def return_busy_dates(datetime_start: str):
     return JSONResponse({"success": True, "data": busy_dates})
 
 
-@app.post("/booking")
+@app.post("/app/booking")
 async def process_booking(
     datetime_start: Annotated[str, Form()],
     datetime_end: Annotated[str, Form()],
@@ -161,7 +163,7 @@ async def process_booking(
         print(e)
 
 
-@app.get("/chat-users")
+@app.get("/app/chat-users")
 async def get_users_for_chat():
     try:
         users = await db.get_users_chat()
@@ -171,7 +173,7 @@ async def get_users_for_chat():
         return JSONResponse({"success": False, "data": "Failed fetch users!"})
 
 
-@app.get("/user/chat")
+@app.get("/app/user/chat")
 async def get_user_chat(user_id: str):
     try:
         messages = await db.get_chat_by_user_id(user_id=int(user_id))
@@ -182,7 +184,7 @@ async def get_user_chat(user_id: str):
         return JSONResponse({"success": False, "data": "Failed fetch user chat!"})
 
 
-@app.get("/get-file")
+@app.get("/app/get-file")
 async def get_file(file_id: str):
     try:
         file_path = await db.get_file_path(file_id=int(file_id))
@@ -199,7 +201,7 @@ async def get_file(file_id: str):
         return HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/upload/panel")
+@app.post("/app/upload/panel")
 async def upload_files(
     files: List[UploadFile] = File(...),
     user_id: int = Form(...),

@@ -1,1 +1,1 @@
-export const DB_URL = "https://oo47v0-5-144-122-246.ru.tuna.am";
+export const DB_URL = "https://zerostar0191.fvds.ru/app";
