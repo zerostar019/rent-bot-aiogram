@@ -91,17 +91,18 @@ const BookingForm = ({
                                 id: 1,
                                 label: "Почасово",
                                 value: "hourly",
+                                disabled: true,
                             },
                         ]}
                         placeholder="Тип бронирования"
                     />
                 </Form.Item>
                 <Form.Item
-                    rules={[{required: true, message: "Введите Telegram ID"}]}
+                    rules={[{required: false, message: "Введите Telegram ID"}]}
                     label="Telegram ID"
                     name="user_id"
                 >
-                    <Input placeholder="ID"/>
+                    <Input placeholder="ID (необязательно)"/>
                 </Form.Item>
                 <Form.Item
                     rules={[{required: true, message: "Выберите интервал"}]}
@@ -183,7 +184,7 @@ const finishBooking = async (
             .toString()
     );
 
-    formData.append("user_id", values["user_id"]);
+    formData.append("user_id", values["user_id"] ?? "");
     formData.append("amount", values["amount"]);
     if ("from_panel" in values) {
         formData.append("from_panel", values["from_panel"]);
