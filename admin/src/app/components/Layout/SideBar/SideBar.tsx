@@ -1,12 +1,12 @@
 import classNames from "classnames";
 import styles from "./styles.module.scss";
-import { Card } from "antd";
-import { SideMenuItems } from "./Menu";
+import {Card} from "antd";
+import {SideMenuItems} from "./Menu";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import {useEffect, useState} from "react";
+import {usePathname} from "next/navigation";
 
-const SideBar = ({ className }: { className: string }) => {
+const SideBar = ({className}: { className: string }) => {
     const [selected, setSelected] = useState<number>(0);
     const pathName = usePathname();
 
@@ -44,13 +44,13 @@ const SideBar = ({ className }: { className: string }) => {
 export default SideBar;
 
 
-
 function getSelectedPath(pathName: string): number {
     if (pathName.match("chat")) {
         return SideMenuItems.find(el => el.link ? el.link.match("chat") : 0)?.id ?? 0
-    }
-    else if (pathName.match("booking")) {
+    } else if (pathName.match("booking")) {
         return SideMenuItems.find(el => el.link ? el.link.match("booking") : 0)?.id ?? 0
+    } else if (pathName.match("settings")) {
+        return SideMenuItems.find(el => el.link ? el.link.match("settings") : 0)?.id ?? 0
     }
     return 0
 }

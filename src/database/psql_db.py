@@ -55,7 +55,6 @@ class Database:
     #         print(f"Ошибка при получении пользователей: {e}")
     #         return None
 
-
     async def get_users_chat(self) -> Optional[List[Dict]]:
         """Получить пользователей с непрочитанными сообщениями, у которых есть хотя бы одно сообщение"""
         try:
@@ -610,6 +609,42 @@ class Database:
             current_day += timedelta(days=1)
 
         return blocked_days
+
+    async def get_field_text(self, field_name: str) -> any:
+        try:
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    result = await conn.fetchval(
+                        """
+                        SELECT field_text FROM settings
+                        WHERE field_name=$1;
+                        """,
+                        field_name,
+                    )
+                    if result is not None:
+                        return result
+                    return None
+        except Exception as e:
+            print(f"Error fetching bookings: {e}")
+            return None
+
+    async def update_field_text(self, field_name: str, field_text: str) -> any:
+        """Обновить текст поля сообщения"""
+        try:
+            async with self.acquire_connection() as conn:
+                await conn.execute(
+                    """
+                    UPDATE settings 
+                    SET field_text = $1
+                    WHERE field_name = $2;
+                """,
+                    field_text,
+                    field_name,
+                )
+                return True
+        except Exception as e:
+            print(f"Ошибка при обновлении field_text: {e}")
+            return None
 
 
 db = Database()

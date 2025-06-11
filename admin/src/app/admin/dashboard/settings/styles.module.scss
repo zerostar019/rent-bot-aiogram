@@ -1,0 +1,12 @@
+.page-layout {
+  display: flex;
+  flex-direction: column;
+  max-width: 50%;
+  gap: 2rem;
+  padding: 1rem;
+}
+
+.header-text {
+  font-size: 1.5rem;
+  font-weight: 600;
+}

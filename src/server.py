@@ -528,6 +528,38 @@ async def delete_booking(booking_id: int) -> JSONResponse:
         )
 
 
+@app.get("/app/get-field-text")
+async def get_payment_text(field_name: str) -> JSONResponse:
+    try:
+        payment_text = await db.get_field_text(field_name=field_name)
+        answer = {"text": payment_text}
+        return JSONResponse({"success": True, "data": answer})
+    except Exception as e:
+        print(e)
+        return JSONResponse(
+            status_code=500, content={"success": False, "message": f"Ошибка: {str(e)}"}
+        )
+
+
+@app.post("/app/set-field-text")
+async def set_field_text(
+    field_name: Annotated[str, Form()], field_text: Annotated[str, Form()]
+) -> JSONResponse:
+    try:
+        is_changed = await db.update_field_text(
+            field_name=field_name, field_text=field_text
+        )
+        print(is_changed)
+        if is_changed is True:
+            return JSONResponse({"success": True, "data": ""})
+        return JSONResponse({"success": False, "data": ""})
+    except Exception as e:
+        print(e)
+        return JSONResponse(
+            status_code=500, content={"success": False, "message": f"Ошибка: {str(e)}"}
+        )
+
+
 async def send_deny_message(booking_id: int, chat_id: int):
     try:
         booking_data = await db.get_booking_data_by_id(booking_id=booking_id)

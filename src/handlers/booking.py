@@ -31,6 +31,8 @@ booking = Router()
 async def begin_booking(callback: CallbackQuery, state: FSMContext) -> None:
     try:
         await state.clear()
+        if scheduler.get_job(f"{callback.message.chat.id}_job"):
+            scheduler.remove_job(f"{callback.message.chat.id}_job")
         booking_id = callback.data.split("_")[-1]
         is_deleted = await db.delete_booking_by_id(booking_id=int(booking_id))
         if is_deleted is not True:
@@ -53,12 +55,18 @@ async def process_payment(callback: CallbackQuery, state: FSMContext) -> None:
         if booking_data is None:
             await show_error_callback(callback=callback)
             return
-        text = await create_payment_text(amount=booking_data["amount"])
+        payment_text = await db.get_field_text(field_name="payment_text")
+        payment_text = str(payment_text).replace("\\n", "\n")
+        text = await create_payment_text(
+            text=payment_text, amount=booking_data["amount"]
+        )
         reply_markup = await attach_bill_kb(booking_id=booking_id)
         await callback.message.edit_text(
             text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
     except Exception as e:
+        await db.delete_booking_by_id(booking_id=int(booking_id))
+        scheduler.remove_job(f"{callback.message.chat.id}_job")
         print(e)
         await show_error_callback(callback=callback)
 
@@ -86,6 +94,7 @@ async def start_receiving_bill(callback: CallbackQuery, state: FSMContext) -> No
         )
         await state.set_state(Bill.bill)
     except Exception as e:
+        scheduler.remove_job(f"{callback.message.chat.id}_job")
         print(e)
         await show_error_callback(callback=callback)
 
@@ -159,5 +168,3 @@ async def get_bill(message: Message, state: FSMContext):
         await state.clear()
     except Exception as e:
         print(e)
-
-
