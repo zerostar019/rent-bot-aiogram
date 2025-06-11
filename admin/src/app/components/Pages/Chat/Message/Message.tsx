@@ -7,6 +7,7 @@ import {Dispatch, SetStateAction, useEffect, useState} from "react";
 import {Button, Image, message as msg} from "antd";
 import {KeyedMutator} from "swr";
 
+
 interface FilesInterface {
     file_name: string;
     file_url: string;
@@ -50,17 +51,27 @@ const Message = (
           dangerouslySetInnerHTML={{__html: message.message.replaceAll("\n\n", "<br/><br/>")}}
           className={styles["message-text"]}></span>
 
-                {!isImage && message.file_id && fileData && (
-                    <a
-                        href={fileData.file_url}
-                        download={fileData.file_name}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles["message-file"]}
-                    >
-                        📎 {fileData.file_name}
-                    </a>
-                )}
+                {!isImage && message.file_id && fileData && !fileData.file_name.includes(".pdf")
+                    && (
+                        <a
+                            href={fileData.file_url}
+                            download={fileData.file_name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles["message-file"]}
+                        >
+                            📎 {fileData.file_name}
+                        </a>
+                    )}
+                {!isImage && message.file_id && fileData && fileData.file_name.includes(".pdf")
+                    && (
+                        <iframe
+                            src={`https://docs.google.com/gview?url=${DB_URL}/get-file?file_id=${message.file_id}&embedded=true`}
+                            title={fileData.file_name}
+                            width="100%"
+                            height="550px"
+                        />
+                    )}
                 {isImage && message.file_id && fileData && (
                     <Image
                         width={200}
@@ -76,8 +87,8 @@ const Message = (
                 <span className={styles["message-date"]}>
         {dayjs(message.created_at).format("DD.MM.YYYY HH:mm")}
       </span>
-                {message.approved === false && <span><i>Бронирование отклонено</i></span>}
-                {message.booking_id && !message.approved && message.approved !== false && < div
+                {/*{!message.approved && <span><i>Бронирование отклонено</i></span>}*/}
+                {message.booking_id && !message.approved && < div
                     className={styles["message-buttons-layout"]}
                 >
                     <Button
@@ -133,6 +144,7 @@ const fetchFile = async (
         }
 
         const fileUrl = URL.createObjectURL(blob);
+        console.log(fileUrl)
         setFileData({file_name: fileName!, file_url: fileUrl});
     } catch (error) {
         console.error("Ошибка при загрузке файла:", error);
@@ -172,7 +184,7 @@ const applyToBooking = async (
     approved: boolean,
     mutate: KeyedMutator<unknown>,
     user_id: number,
-    rental_id?: number
+    rental_id ?: number
 ) => {
     setLoading(true);
     const formData = new FormData();
@@ -194,7 +206,7 @@ const applyToBooking = async (
     if (result.success) {
         msg.success("Бронирование успешно подтверждено!");
         setLoading(false);
-        mutate()
+        await mutate();
         return
     }
     msg.error("Ошибка при обновлении статуса!");

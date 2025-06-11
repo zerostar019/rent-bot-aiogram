@@ -485,7 +485,6 @@ async def update_rental(
 async def update_rental_status(
     approved: Annotated[str, Form()],
     id_rental: Annotated[int, Form()],
-    user_id: Annotated[str, Form()],
 ):
     try:
         if approved.strip() == "false":
@@ -495,11 +494,10 @@ async def update_rental_status(
         result = await db.update_rental_status(
             id_rental=int(id_rental), approved=approved
         )
-        scheduler.remove_job(f"{user_id}_job")
         text = "✅ Бронирование подтверждено!"
+        await db.delete_booking_by_id(booking_id=int(id_rental))
         if approved is False:
             text = "❌ Бронирование отклонено"
-            await db.delete_booking_by_id(booking_id=int(id_rental))
         if result is not None:
             await bot.send_message(text=text, chat_id=result["id_user"])
             return JSONResponse(

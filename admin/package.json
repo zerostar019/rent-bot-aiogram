@@ -11,6 +11,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
     "@ant-design/nextjs-registry": "^1.0.2",
+    "@pdf-viewer/react": "^1.7.0",
     "@telegram-apps/bridge": "^2.8.2",
     "@telegram-apps/sdk": "^3.9.2",
     "@telegram-web-app/react": "0.0.1-beta.1",

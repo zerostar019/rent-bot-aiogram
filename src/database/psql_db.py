@@ -66,7 +66,7 @@ class Database:
                             u.user_id,
                             SUM(CASE WHEN c.read_at IS NULL THEN 1 ELSE 0 END) AS unread_count
                         FROM users u
-                        INNER JOIN chat c ON u.user_id = c.user_id
+                        INNER JOIN chat c ON u.user_id = c.user_id AND c.user_id != 111
                         GROUP BY u.user_id
                         ORDER BY MAX(c.created_at) DESC;
                     """)
