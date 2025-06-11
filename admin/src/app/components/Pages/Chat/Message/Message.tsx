@@ -13,84 +13,98 @@ interface FilesInterface {
 }
 
 const Message = (
-    {
-        message,
-        mutate
-    }:
-    {
-        message: WebSocketMessage,
-        mutate: KeyedMutator<unknown>
-    }) => {
-    const [fileData, setFileData] = useState<FilesInterface | null>(null);
-    const [isImage, setImage] = useState<boolean>(false);
+        {
+            message,
+            mutate
+        }:
+        {
+            message: WebSocketMessage,
+            mutate: KeyedMutator<unknown>
+        }) => {
+        const [fileData, setFileData] = useState<FilesInterface | null>(null);
+        const [isImage, setImage] = useState<boolean>(false);
 
-    useEffect(() => {
-        if (message.file_id) {
-            fetchFile(message.file_id, setFileData, setImage);
-        }
-    }, [message.file_id]);
-
-    useEffect(() => {
-        return () => {
-            if (fileData?.file_url) {
-                URL.revokeObjectURL(fileData.file_url);
+        useEffect(() => {
+            if (message.file_id) {
+                fetchFile(message.file_id, setFileData, setImage);
             }
-        };
-    }, [fileData]);
+        }, [message.file_id]);
 
-    const [loading, setLoading] = useState<boolean>(false);
+        useEffect(() => {
+            return () => {
+                if (fileData?.file_url) {
+                    URL.revokeObjectURL(fileData.file_url);
+                }
+            };
+        }, [fileData]);
 
-    return (
-        <div
-            className={classNames(styles["message"], {
-                [styles["message-right"]]: message.user_id === 111,
-            })}
-        >
+        const [loading, setLoading] = useState<boolean>(false);
+
+        return (
+            <div
+                className={classNames(styles["message"], {
+                    [styles["message-right"]]: message.user_id === 111,
+                })}
+            >
       <span
           dangerouslySetInnerHTML={{__html: message.message.replaceAll("\n\n", "<br/><br/>")}}
           className={styles["message-text"]}></span>
 
-            {!isImage && message.file_id && fileData && (
-                <a
-                    href={fileData.file_url}
-                    download={fileData.file_name}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles["message-file"]}
-                >
-                    📎 {fileData.file_name}
-                </a>
-            )}
-            {isImage && message.file_id && fileData && (
-                <Image
-                    width={200}
-                    height={200}
-                    style={{
-                        objectFit: "cover",
-                    }}
-                    src={fileData.file_url}
-                    alt={fileData.file_name}
-                />
-            )}
+                {!isImage && message.file_id && fileData && (
+                    <a
+                        href={fileData.file_url}
+                        download={fileData.file_name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles["message-file"]}
+                    >
+                        📎 {fileData.file_name}
+                    </a>
+                )}
+                {isImage && message.file_id && fileData && (
+                    <Image
+                        width={200}
+                        height={200}
+                        style={{
+                            objectFit: "cover",
+                        }}
+                        src={fileData.file_url}
+                        alt={fileData.file_name}
+                    />
+                )}
 
-            <span className={styles["message-date"]}>
+                <span className={styles["message-date"]}>
         {dayjs(message.created_at).format("DD.MM.YYYY HH:mm")}
       </span>
-            {message.booking_id && !message.approved && <div
-                className={styles["message-buttons-layout"]}
-            >
-                <Button
-                    onClick={() => applyToBooking(setLoading, true, mutate, message.booking_id)}
-                    loading={loading}
-                >✅ Подтвердить</Button>
-                <Button
-                    onClick={() => applyToBooking(setLoading, false, mutate, message.booking_id)}
-                    loading={loading}
-                >❌ Отклонить</Button>
-            </div>}
-        </div>
-    );
-};
+                {message.approved === false && <span><i>Бронирование отклонено</i></span>}
+                {message.booking_id && !message.approved && message.approved !== false && < div
+                    className={styles["message-buttons-layout"]}
+                >
+                    <Button
+                        onClick={() => applyToBooking(
+                            setLoading,
+                            true,
+                            mutate,
+                            message.user_id,
+                            message.booking_id)}
+                        loading={loading}
+                    >✅ Подтвердить</Button>
+                    <Button
+                        onClick={() => applyToBooking(
+                            setLoading,
+                            false,
+                            mutate,
+                            message.user_id,
+                            message.booking_id)}
+                        loading={loading}
+                    >❌ Отклонить</Button>
+                </div>
+                }
+            </div>
+        )
+            ;
+    }
+;
 
 export default Message;
 
@@ -157,12 +171,14 @@ const applyToBooking = async (
     setLoading: Dispatch<SetStateAction<boolean>>,
     approved: boolean,
     mutate: KeyedMutator<unknown>,
-    rental_id ?: number
+    user_id: number,
+    rental_id?: number
 ) => {
     setLoading(true);
     const formData = new FormData();
     formData.append("approved", String(approved));
     formData.append("id_rental", String(rental_id));
+    formData.append("user_id", String(user_id));
     const response = await fetch(`${DB_URL}/update-rental-status`, {
         method: "POST",
         body: formData,

@@ -16,7 +16,7 @@ export const scrollButton = (setButton: Dispatch<SetStateAction<boolean>>) => {
   const elem: HTMLElement | null = document.getElementById("chat-body");
   if (elem) {
     const scrollTo = elem.scrollHeight - elem.scrollTop - elem.clientHeight;
-    if (scrollTo !== 0) {
+    if (scrollTo > 30) {
       setButton(true);
     } else {
       setButton(false);

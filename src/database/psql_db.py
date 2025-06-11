@@ -38,17 +38,37 @@ class Database:
         async with self.pool.acquire() as conn:
             yield conn
 
+    # async def get_users_chat(self) -> Optional[List[Dict]]:
+    #     """Получить пользователей с количеством непрочитанных сообщений"""
+    #     try:
+    #         async with self.acquire_connection() as conn:
+    #             async with conn.transaction():
+    #                 data = await conn.fetch("""
+    #                     SELECT u.user_id, COUNT(c.id) AS unread_count
+    #                     FROM users u
+    #                     LEFT JOIN chat c ON u.user_id = c.user_id AND c.read_at IS NULL
+    #                     AND c.user_id != 111 WHERE u.user_id != 111
+    #                     GROUP BY u.user_id;
+    #                 """)
+    #                 return [dict(record) for record in data]
+    #     except Exception as e:
+    #         print(f"Ошибка при получении пользователей: {e}")
+    #         return None
+
+
     async def get_users_chat(self) -> Optional[List[Dict]]:
-        """Получить пользователей с количеством непрочитанных сообщений"""
+        """Получить пользователей с непрочитанными сообщениями, у которых есть хотя бы одно сообщение"""
         try:
             async with self.acquire_connection() as conn:
                 async with conn.transaction():
                     data = await conn.fetch("""
-                        SELECT u.user_id, COUNT(c.id) AS unread_count
+                        SELECT 
+                            u.user_id,
+                            SUM(CASE WHEN c.read_at IS NULL THEN 1 ELSE 0 END) AS unread_count
                         FROM users u
-                        LEFT JOIN chat c ON u.user_id = c.user_id AND c.read_at IS NULL
-                        AND c.user_id != 111 WHERE u.user_id != 111
-                        GROUP BY u.user_id;
+                        INNER JOIN chat c ON u.user_id = c.user_id
+                        GROUP BY u.user_id
+                        ORDER BY MAX(c.created_at) DESC;
                     """)
                     return [dict(record) for record in data]
         except Exception as e:
@@ -62,13 +82,16 @@ class Database:
                 async with conn.transaction():
                     data = await conn.fetch(
                         """
-                        SELECT * FROM chat 
-                        WHERE chat_id = $1 
+                        SELECT 
+                            chat.*,
+                            rental.approved AS approved
+                        FROM chat
+                        LEFT JOIN rental ON chat.booking_id = rental.id
+                        WHERE chat.chat_id = $1
                         ORDER BY created_at ASC;
-                    """,
+                        """,
                         user_id,
                     )
-
                     messages = [dict(record) for record in data]
                     for msg in messages:
                         if isinstance(msg["created_at"], datetime):
@@ -98,7 +121,12 @@ class Database:
             return None
 
     async def new_rental(
-        self, user_id: int, rent_type: str, time_interval: list, amount: str
+        self,
+        user_id: int,
+        rent_type: str,
+        time_interval: list,
+        amount: str,
+        from_panel: bool = False,
     ) -> Union[None, bool, int]:
         """
         Новая бронь
@@ -132,13 +160,14 @@ class Database:
                 async with conn.transaction():
                     result = await conn.fetchval(
                         """
-                        INSERT INTO Rental (id_user, created_at, rent_type, time_interval, amount)
-                        VALUES ($1, NOW(), $2, $3::TSRANGE, $4) RETURNING id;
+                        INSERT INTO Rental (id_user, created_at, rent_type, time_interval, amount, approved)
+                        VALUES ($1, NOW(), $2, $3::TSRANGE, $4, $5) RETURNING id;
                         """,
                         user_id,
                         rent_type,
                         time_range,
                         amount,
+                        from_panel,
                     )
                     if result is not None:
                         return result
@@ -147,7 +176,73 @@ class Database:
             print(f"Error creating rental: {e}")
             return None
 
-    async def get_booking_data_by_id(self, booking_id: int) -> Union[tuple, None]:
+    async def update_rental(
+        self,
+        id_rental: int,
+        user_id: int,
+        rent_type: str,
+        time_interval: list,
+        amount: int,
+        approved: bool,
+    ) -> Union[None, int]:
+        """
+        Обновление существующей брони
+
+        :param amount: Сумма бронирования
+        :param id_rental: ID брони для обновления
+        :param rent_type: Тип бронирования
+        :param time_interval: Временной интервал
+        :param user_id: ID пользователя
+        :return
+        """
+        try:
+            time_range = Range(
+                datetime(
+                    time_interval[0][0],
+                    time_interval[0][1],
+                    time_interval[0][2],
+                    time_interval[0][3],
+                    time_interval[0][4],
+                ),
+                datetime(
+                    time_interval[1][0],
+                    time_interval[1][1],
+                    time_interval[1][2],
+                    time_interval[1][3],
+                    time_interval[1][4],
+                ),
+                upper_inc=True,
+                lower_inc=False,
+            )
+
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    result = await conn.fetchval(
+                        """
+                            UPDATE Rental 
+                        SET id_user = $1, 
+                            rent_type = $2, 
+                            time_interval = $3::TSRANGE, 
+                            amount = $4,
+                            approved = $5
+                        WHERE id = $6
+                        RETURNING id;
+                            """,
+                        user_id,
+                        rent_type,
+                        time_range,
+                        amount,
+                        approved,
+                        id_rental,
+                    )
+                    if result is not None:
+                        return result
+                    return None
+        except Exception as e:
+            print(f"Error updating rental: {e}")
+            return None
+
+    async def get_booking_data_by_id(self, booking_id: int) -> Union[dict, None]:
         try:
             async with self.acquire_connection() as conn:
                 async with conn.transaction():
@@ -158,10 +253,18 @@ class Database:
                         booking_id,
                     )
                     if booking_data is not None:
-                        return dict(booking_data)
+                        data = dict(booking_data)
+                        for key, value in data.items():
+                            if isinstance(value, datetime):
+                                data[key] = value.isoformat()
+                            elif isinstance(value, asyncpg.Range):
+                                start = value.lower.isoformat() if value.lower else None
+                                end = value.upper.isoformat() if value.upper else None
+                                data[key] = {"start": start, "end": end}
+                        return data
                     return None
         except Exception as e:
-            print(f"Error creating rental: {e}")
+            print(f"Error getting rent data: {e}")
             return None
 
     async def delete_booking_by_id(self, booking_id: int) -> Union[bool, None]:
@@ -174,6 +277,14 @@ class Database:
                             WHERE id = $1
                             RETURNING id
                             """,
+                        booking_id,
+                    )
+                    await conn.execute(
+                        """
+                        DELETE FROM chat
+                        WHERE booking_id = $1
+                        RETURNING id
+                        """,
                         booking_id,
                     )
                     if deleted_row:
@@ -194,7 +305,7 @@ class Database:
             # Преобразуем входной массив в datetime
             year, month, day, hour, minute = date_array
             start_dt = datetime(year, month, day, hour, minute)
-            end_dt = start_dt + timedelta(days=30)  # Месяц вперед
+            end_dt = start_dt + timedelta(days=60)  # 2 месяца вперед
 
             async with self.acquire_connection() as conn:
                 async with conn.transaction():
@@ -265,6 +376,7 @@ class Database:
         user_id: int,
         message_text: str,
         chat_id: int,
+        booking_id: int = None,
     ) -> Union[bool, None]:
         try:
             async with self.acquire_connection() as conn:
@@ -279,13 +391,14 @@ class Database:
                     )
                     message = await conn.fetchrow(
                         """
-                        INSERT INTO chat (message, user_id, file_id, created_at, chat_id)
-                        VALUES($1, $2, $3, NOW(), $4) RETURNING *;
+                        INSERT INTO chat (message, user_id, file_id, created_at, chat_id, booking_id)
+                        VALUES($1, $2, $3, NOW(), $4, $5) RETURNING *;
                         """,
                         message_text,
                         user_id,
                         file_id,
                         chat_id,
+                        booking_id,
                     )
                     message = dict(message)
                     message["created_at"] = message["created_at"].isoformat()
@@ -372,6 +485,131 @@ class Database:
         except Exception as e:
             print(f"Error fetching file_path: {e}")
             return None
+
+    def serialize_record(self, record):
+        def convert_value(value):
+            if isinstance(value, datetime):
+                return value.isoformat()
+            elif isinstance(value, asyncpg.Range):  # Для tsrange
+                start = value.lower.isoformat() if value.lower else ""
+                end = value.upper.isoformat() if value.upper else ""
+                return f"[{start}, {end})"
+            return value  # Остальные типы остаются как есть
+
+        # Преобразуем record в словарь и добавляем 'key' = 'id'
+        data = dict(record)
+        data["key"] = data["id"]  # Добавляем несуществующий столбец 'key'
+
+        # Применяем конвертацию только к существующим полям
+        return {key: convert_value(value) for key, value in data.items()}
+
+    async def get_bookings(
+        self, select_base: str, limit_offset: str, count_query: str, params: list
+    ) -> any:
+        try:
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    records = await conn.fetch(select_base + limit_offset, *params)
+
+                    # Преобразуем все datetime и tsrange в строки, добавляем 'key'
+                    processed_records = [
+                        self.serialize_record(record) for record in records
+                    ]
+
+                    total = await conn.fetchval(count_query, *params[:-2])
+                    return {
+                        "data": processed_records,
+                        "total": total,
+                    }
+        except Exception as e:
+            print(f"Error fetching bookings: {e}")
+            return None
+
+    async def update_rental_status(
+        self,
+        id_rental: int,
+        approved: bool,
+    ) -> Union[None, int]:
+        """
+        Обновление существующей брони
+
+        :param amount: Сумма бронирования
+        :param id_rental: ID брони для обновления
+        :param approved: Статус брони
+        :return
+        """
+        try:
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    result = await conn.fetchrow(
+                        """
+                        UPDATE Rental 
+                        SET approved = $1
+                        WHERE id = $2
+                        RETURNING *;
+                            """,
+                        approved,
+                        id_rental,
+                    )
+                    if result is not None:
+                        return dict(result)
+                    return None
+        except Exception as e:
+            print(f"Error updating rental status: {e}")
+            return None
+
+    async def get_blocked_days(
+        self, start_date_array: list[int], check_days_ahead: int = 30
+    ) -> list[str]:
+        """
+        Возвращает все даты недоступные для выбора окончания бронирования, после выбора даты заезда.
+        Example:
+        db.get_blocked_days([2025, 5, 30, 14, 00])
+        :param start_date_array: [year, month, day, hour, minute]
+        :param check_days_ahead:
+        :return:
+        """
+        year, month, day, hour, minute = start_date_array
+        checkin_base = datetime(year, month, day, 14, 0)
+
+        first_booking_day = None
+
+        async with self.acquire_connection() as conn:
+            for i in range(1, check_days_ahead + 1):
+                checkout_day = checkin_base + timedelta(days=i)
+                checkout_time = datetime(
+                    checkout_day.year, checkout_day.month, checkout_day.day, 13, 0
+                )
+                rental_start = checkin_base
+                rental_end = checkout_time
+
+                query = """
+                        SELECT EXISTS (
+                            SELECT 1 FROM Rental
+                            WHERE time_interval && TSRANGE($1, $2)
+                        );
+                    """
+
+                is_booked: bool = await conn.fetchval(query, rental_start, rental_end)
+                if is_booked:
+                    first_booking_day = checkout_day
+                    break  # Останавливаемся на первом пересечении
+
+        if not first_booking_day:
+            return []  # Нет пересечений — ничего не блокируем
+
+        # Теперь собираем все дни с first_booking_day до конца месяца
+        end_of_month = (first_booking_day.replace(day=28) + timedelta(days=4)).replace(
+            day=1
+        ) - timedelta(days=1)
+        current_day = first_booking_day
+        blocked_days = []
+
+        while current_day <= end_of_month:
+            blocked_days.append(current_day.strftime("%d.%m.%Y"))
+            current_day += timedelta(days=1)
+
+        return blocked_days
 
 
 db = Database()

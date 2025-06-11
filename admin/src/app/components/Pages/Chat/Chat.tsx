@@ -54,6 +54,7 @@ const Chat = ({
     const [message, setMessage] = useState<string>("");
 
     const [loading, setLoading] = useState<boolean>(true);
+    const [sendLoading, setSendLoading] = useState<boolean>(false);
     const {userMessages, mutate} = useMessages(selectedUser?.user_id);
     const [button, setButton] = useState<boolean>(false);
     const [files, setFiles] = useState<UploadFile[]>([]);
@@ -194,13 +195,14 @@ const Chat = ({
                     />
                 )}
                 <UploadButton
+                    sendLoading={sendLoading}
                     selectedUser={selectedUser}
                     fileList={files}
                     setFiles={setFiles}
                     messageApi={messageApi}
                 />
                 <Input
-                    disabled={selectedUser?.user_id ? false : true}
+                    disabled={!selectedUser?.user_id || sendLoading}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Написать сообщение..."
@@ -218,7 +220,8 @@ const Chat = ({
                                     mutate,
                                     messageApi,
                                     setFiles,
-                                    setMessage
+                                    setMessage,
+                                    setSendLoading
                                 );
                                 return;
                             }
@@ -232,6 +235,7 @@ const Chat = ({
                     }}
                 />
                 <Button
+                    loading={sendLoading}
                     disabled={!selectedUser?.user_id}
                     onClick={() => {
                         if (!selectedUser?.user_id) {
@@ -245,7 +249,8 @@ const Chat = ({
                                 mutate,
                                 messageApi,
                                 setFiles,
-                                setMessage
+                                setMessage,
+                                setSendLoading
                             );
                             return;
                         }
@@ -290,8 +295,10 @@ async function sendFiles(
     mutate: KeyedMutator<unknown>,
     messageApi: MessageInstance,
     setFiles: Dispatch<SetStateAction<UploadFile[]>>,
-    setMessage: Dispatch<SetStateAction<string>>
+    setMessage: Dispatch<SetStateAction<string>>,
+    setSendLoading: Dispatch<SetStateAction<boolean>>
 ) {
+    setSendLoading(true);
     const formData = new FormData();
     fileList.forEach((file) =>
         formData.append("files", file.originFileObj as File)
@@ -311,15 +318,18 @@ async function sendFiles(
             setMessage("");
             mutate();
             setTimeout(() => scrollDown(), 500);
+            setSendLoading(false);
             return;
         }
         messageApi.error("Ошибка отправки файлов!");
         setFiles([]);
         setMessage("");
+        setSendLoading(false);
         return;
     }
     messageApi.error("Ошибка отправки файлов!");
     setFiles([]);
     setMessage("");
+    setSendLoading(false);
     return;
 }

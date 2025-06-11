@@ -37,6 +37,12 @@
   grid-area: table;
 }
 
+.actions-layout {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
 @media (max-width: 65.625rem) {
   .page-title {
     font-size: 1.25rem;

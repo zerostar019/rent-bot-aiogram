@@ -45,7 +45,7 @@ const BookingForm = ({userData}: { userData: UserDataInterface }) => {
         if (selectedDate.date_end && selectedDate.date_start) {
             Telegram.WebApp.MainButton.enable();
             Telegram.WebApp.MainButton.color = "rgb(140, 100, 255)";
-            Telegram.WebApp.MainButton.text = "Забронировать";
+            Telegram.WebApp.MainButton.text = "Продолжить бронирование";
             Telegram.WebApp.MainButton.hasShineEffect = true;
             return;
         }
@@ -193,7 +193,7 @@ const handleBooking = async (
         if (request.ok) {
             const result = await request.json();
             if (result.success) {
-                messageApi.success("Успешно забронировано!");
+                messageApi.success("Успех!");
                 setTimeout(() => {
                     Telegram.WebApp.close();
                 }, 1000);

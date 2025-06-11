@@ -1,4 +1,4 @@
-import {Dispatch, SetStateAction, useEffect, useState} from "react";
+import {Dispatch, SetStateAction, useEffect, useRef, useState} from "react";
 import {WebSocketMessage} from "../types/WebsocketTypes";
 import dayjs from "dayjs";
 import {NotificationInstance} from "antd/es/notification/interface";
@@ -17,6 +17,7 @@ const useWebSocket = (
     const [messages, setMessages] = useState<WebSocketMessage[]>([]);
     const [ws, setWs] = useState<WebSocket | null>(null);
     const [error, setError] = useState<boolean>(false);
+    const usersRef = useRef(users);
 
     useEffect(() => {
         const connect = () => {
@@ -47,6 +48,10 @@ const useWebSocket = (
     }, [url]);
 
     useEffect(() => {
+        usersRef.current = users;
+    }, [users]);
+
+    useEffect(() => {
         if (ws) {
             ws.onmessage = ({data}) => {
                 const userMessage: WebSocketMessage = JSON.parse(data);
@@ -55,19 +60,22 @@ const useWebSocket = (
                     setTimeout(() => scrollDown(), 500);
                     return;
                 }
-                if (users && users.length > 0 && selectedUser !== userMessage.user_id) {
-                    const newUsers = users.map((user) => {
-                        if (user.user_id === userMessage.user_id) {
-                            return {
-                                ...user,
-                                unread_count: (user.unread_count ?? 0) + 1,
-                            };
-                        }
-                        return {...user};
-                    });
-                    const sortedUsers = sortUsersByUnreadDesc(newUsers);
-                    setUsers(sortedUsers);
-                }
+
+                const currentUsers = usersRef.current;
+
+                const newUsers = currentUsers.map((user) => {
+                    if (user.user_id === userMessage.user_id) {
+                        return {
+                            ...user,
+                            unread_count: (user.unread_count || 0) + 1,
+                        };
+                    }
+                    return user;
+                });
+
+                const sortedUsers = sortUsersByUnreadDesc(newUsers);
+                setUsers(sortedUsers);
+
                 api.info({
                     onClick: () => setSelectedUser({user_id: userMessage.user_id}),
                     message: "Новое сообщение от " + userMessage.user_id,

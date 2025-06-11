@@ -84,7 +84,7 @@ const DateCalendar = ({
                         fullscreen={false}
                         onSelect={(date, selectInfo) => {
                             if (selectInfo.source === "date")
-                                handleChangeDate(setDate, date, selectedDate);
+                                handleChangeDate(setDate, date, selectedDate, disabledDates);
                         }}
                         fullCellRender={(date) => handleRenderCell(date, selectedDate)}
                         onPanelChange={(date, mode) => {
@@ -105,12 +105,13 @@ const handleChangeDate = (
     setDate: Dispatch<SetStateAction<DatePickerInterface>>,
     date: Dayjs,
     selectedDate: DatePickerInterface,
+    disabledDates: Dayjs[],
 ) => {
     const {date_start, date_end} = selectedDate;
+
     if (!date_start && !date_end) {
         setDate({date_start: date, date_end: undefined});
     } else if (date_start && !date_end) {
-        if (date_start.isSame(date, 'date')) return;
         if (date_start.isAfter(date, 'date')) {
             setDate({date_start: date, date_end: undefined});
             return
@@ -119,6 +120,14 @@ const handleChangeDate = (
             setDate({date_start: undefined, date_end: undefined});
             return
         }
+
+        const hasDisabledDateInInterval = disabledDates.some((disabledDate) =>
+            (disabledDate.isBefore(date) || disabledDate.isSame(date))
+            &&
+            (disabledDate.isSame(date_start) || disabledDate.isAfter(date_start)));
+
+        if (hasDisabledDateInInterval) return;
+
         setDate({
             ...selectedDate,
             date_end: date

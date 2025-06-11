@@ -99,6 +99,14 @@ async def admin_keyboard() -> InlineKeyboardMarkup:
                 ),
             )
         ],
+        [
+            InlineKeyboardButton(
+                text="📊 Бронирования",
+                web_app=WebAppInfo(
+                    url="https://zerostar0191.fvds.ru/admin/admin/dashboard/bookings?approved=true"
+                ),
+            )
+        ],
         [InlineKeyboardButton(text="ℹ️ Получить информацию", callback_data="info")],
     ]
 

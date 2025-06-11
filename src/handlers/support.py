@@ -17,7 +17,6 @@ PATH_TO_DOCUMENTS = str(pathlib.Path(__file__).resolve().parent.parent) + "/docu
 
 support = Router()
 
-
 @support.callback_query(F.data == "info")
 async def show_info(callback: CallbackQuery):
     keyboard = await help_menu()
