@@ -194,7 +194,6 @@ async def process_booking(
                 args=job_args,
                 id=f"{user_id}_job",
             )
-            print(job)
             if user_id == "":
                 reply_markup = None
                 job.remove()

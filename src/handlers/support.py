@@ -1,5 +1,11 @@
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    Message,
+    InlineKeyboardButton,
+    WebAppInfo,
+    InlineKeyboardMarkup,
+)
 from handlers.keyboard.kb import help_menu, return_to_menu, return_to_help_menu
 from bot.ws import manager
 from database.psql_db import db
@@ -12,10 +18,25 @@ from constants import (
     SHOW_INFO_TEXT,
 )
 import pathlib
+import asyncio
 
 PATH_TO_DOCUMENTS = str(pathlib.Path(__file__).resolve().parent.parent) + "/documents/"
 
 support = Router()
+
+chat_button = [
+    [
+        InlineKeyboardButton(
+            text="💬 Чаты",
+            web_app=WebAppInfo(
+                url="https://zerostar0191.fvds.ru/admin/admin/dashboard/chat"
+            ),
+        )
+    ],
+]
+
+chat_keyboard = InlineKeyboardMarkup(inline_keyboard=chat_button)
+
 
 @support.callback_query(F.data == "info")
 async def show_info(callback: CallbackQuery):
@@ -50,10 +71,20 @@ async def call_manager(callback: CallbackQuery):
 @support.message(F.content_type.in_({"text"}))
 async def process_chatting_with_admin(message: Message):
     try:
-        message = await db.save_message_from_bot(
+        msg = await db.save_message_from_bot(
             message_text=message.text.strip(), user_id=message.chat.id
         )
-        await manager.broadcast(data=message)
+        admins = await db.get_admins()
+        if admins is not None and len(admins) > 0:
+            for admin in admins:
+                await bot.send_message(
+                    text=f"Новое сообщение от {message.chat.id}: \n\n{message.text.strip()}",
+                    chat_id=int(admin),
+                    parse_mode="HTML",
+                    reply_markup=chat_keyboard
+                )
+                await asyncio.sleep(1)
+        await manager.broadcast(data=msg)
     except Exception as e:
         print(e)
 
@@ -92,6 +123,16 @@ async def get_photo_or_document(message: Message):
             chat_id=message.chat.id,
             message_text=message_text,
         )
+        admins = await db.get_admins()
+        if admins is not None and len(admins) > 0:
+            for admin in admins:
+                await bot.send_message(
+                    text=f"Новое сообщение от {message.chat.id}",
+                    chat_id=int(admin),
+                    parse_mode="HTML",
+                    reply_markup=chat_keyboard,
+                )
+                await asyncio.sleep(1)
         await manager.broadcast(data=message)
     except Exception as e:
         print(e)
