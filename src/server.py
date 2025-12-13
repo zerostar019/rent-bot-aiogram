@@ -197,7 +197,7 @@ async def process_booking(
             if user_id == "":
                 reply_markup = None
                 job.remove()
-            if notification is True:
+            if notification is True and user_id != "":
                 await bot.send_message(
                     chat_id=int(user_id), text=booking_text, reply_markup=reply_markup
                 )
