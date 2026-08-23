@@ -17,7 +17,6 @@ const BookingModal = ({
       centered
       title="Создание бронирования"
       open={modal}
-      onClose={() => setModal(false)}
       onCancel={() => setModal(false)}
       footer={() => null}
       styles={

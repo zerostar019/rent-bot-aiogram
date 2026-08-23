@@ -19,7 +19,6 @@ const UploadButton = ({
 }) => {
     return (
         <Upload
-            // beforeUpload={(file) => beforeUpload(file, messageApi)}
             disabled={sendLoading}
             showUploadList={false}
             maxCount={5}
@@ -45,11 +44,3 @@ const UploadButton = ({
 };
 
 export default UploadButton;
-
-// const beforeUpload = (file: File, messageApi: MessageInstance) => {
-//   const isLt2M = file.size / 1024 / 1024 < 10;
-//   if (!isLt2M) {
-//     messageApi.error("Файл должен быть меньше 10MB!");
-//   }
-//   return isLt2M;
-// };

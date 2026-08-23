@@ -1,24 +1,36 @@
 "use client";
-import { debounce } from "lodash";
-import { useState, useEffect } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
+/**
+ * Раньше здесь было три проблемы:
+ *  - removeEventListener получал не ту функцию (addEventListener вешал
+ *    свежую обёртку debounce), поэтому слушатель не снимался никогда;
+ *  - эффект зависел от matches и на каждое изменение вешал ещё один
+ *    слушатель поверх старых;
+ *  - debounce в 300 мс задерживал реакцию на поворот экрана.
+ * useSyncExternalStore подписывается один раз и корректно отписывается.
+ */
 const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState<boolean>(false);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (typeof window === "undefined") return () => {};
+      const media = window.matchMedia(query);
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    },
+    [query]
+  );
 
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    if (media.matches !== matches) {
-      setMatches(media.matches);
-    }
+  const getSnapshot = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  }, [query]);
 
-    const listener = () => setMatches(media.matches);
+  // На сервере разметки нет — считаем, что это десктоп,
+  // клиент поправит значение сразу после гидрации.
+  const getServerSnapshot = useCallback(() => false, []);
 
-    media.addEventListener("change", debounce(listener, 300));
-
-    return () => media.removeEventListener("change", listener);
-  }, [matches, query]);
-
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 };
 
 export default useMediaQuery;

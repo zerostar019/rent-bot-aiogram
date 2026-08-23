@@ -25,7 +25,7 @@ class Database:
         """
         self.__conn = await aiomysql.connect(
             host=env.DB_HOST.get_secret_value(),
-            user=env.USER.get_secret_value(),
+            user=env.DB_USER.get_secret_value(),
             password=env.PASSWORD.get_secret_value(),
             db=env.DB.get_secret_value(),
         )
@@ -45,8 +45,8 @@ class Database:
                     await conn.commit()
         except IntegrityError:
             return ("Ошибка ключа", "Данный user_id уже существует!")
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
 
 
 db = Database()

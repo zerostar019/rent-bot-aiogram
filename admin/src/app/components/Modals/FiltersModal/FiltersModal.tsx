@@ -15,7 +15,6 @@ const FiltersModal = ({
       footer={() => null}
       open={open}
       onCancel={() => setOpen(false)}
-      onClose={() => setOpen(false)}
     >
       <Filter setClose={setOpen} />
     </Modal>

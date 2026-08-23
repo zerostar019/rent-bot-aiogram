@@ -6,7 +6,7 @@ async def start_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="⌚️ Забронировать",
-                web_app=WebAppInfo(url="https://zerostar0191.fvds.ru/booking"),
+                web_app=WebAppInfo(url="https://businesspochta.kazan.hlab.kz/booking"),
             )
         ],
         [InlineKeyboardButton(text="ℹ️ Получить информацию", callback_data="info")],
@@ -88,14 +88,14 @@ async def admin_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="⌚️ Забронировать",
-                web_app=WebAppInfo(url="https://zerostar0191.fvds.ru/booking"),
+                web_app=WebAppInfo(url="https://businesspochta.kazan.hlab.kz/booking/"),
             )
         ],
         [
             InlineKeyboardButton(
                 text="💬 Чаты",
                 web_app=WebAppInfo(
-                    url="https://zerostar0191.fvds.ru/admin/admin/dashboard/chat"
+                    url="https://businesspochta.kazan.hlab.kz/admin/admin/dashboard/chat"
                 ),
             )
         ],
@@ -103,7 +103,7 @@ async def admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="📊 Бронирования",
                 web_app=WebAppInfo(
-                    url="https://zerostar0191.fvds.ru/admin/admin/dashboard/bookings?approved=true"
+                    url="https://businesspochta.kazan.hlab.kz/admin/admin/dashboard/bookings?approved=true"
                 ),
             )
         ],
@@ -111,7 +111,7 @@ async def admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="⚙️ Настройки",
                 web_app=WebAppInfo(
-                    url="https://zerostar0191.fvds.ru/admin/admin/dashboard/settings"
+                    url="https://businesspochta.kazan.hlab.kz/admin/admin/dashboard/settings"
                 ),
             )
         ],

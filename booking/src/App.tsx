@@ -19,10 +19,10 @@ function Main() {
     Telegram.WebApp.MainButton.show();
     Telegram.WebApp.lockOrientation();
     Telegram.WebApp.MainButton.hasShineEffect = false;
-    const userData = Telegram.WebApp.initDataUnsafe;
+    const initData = Telegram.WebApp.initDataUnsafe;
     setUserData({
-      userId: userData.user?.id,
-      queryId: userData.query_id,
+      userId: initData.user?.id,
+      queryId: initData.query_id,
     });
   }, []);
 

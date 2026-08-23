@@ -1,121 +1,192 @@
-import {Dispatch, SetStateAction, useEffect, useRef, useState} from "react";
-import {WebSocketMessage} from "../types/WebsocketTypes";
-import dayjs from "dayjs";
-import {NotificationInstance} from "antd/es/notification/interface";
-import {ChatUsersInterface} from "../types/Users";
-import {scrollDown} from "../utils/utils";
-import {sortUsersByUnreadDesc} from "../components/Pages/Chat/ChatUsers";
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { WebSocketMessage } from "../types/WebsocketTypes";
+import { NotificationInstance } from "antd/es/notification/interface";
+import { ChatUsersInterface } from "../types/Users";
+
+export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "offline";
+
+/** Пауза перед повторным подключением: 1с, 2с, 4с… но не дольше 15с. */
+const backoffDelay = (attempt: number) =>
+  Math.min(1000 * 2 ** Math.min(attempt, 4), 15000);
+
+const HEARTBEAT_INTERVAL = 25000;
 
 const useWebSocket = (
-    url: string,
-    selectedUser: number | undefined,
-    api: NotificationInstance,
-    setSelectedUser: Dispatch<SetStateAction<ChatUsersInterface | undefined>>,
-    users: ChatUsersInterface[],
-    setUsers: Dispatch<SetStateAction<ChatUsersInterface[]>>
+  url: string,
+  selectedUser: number | undefined,
+  api: NotificationInstance,
+  setSelectedUser: Dispatch<SetStateAction<ChatUsersInterface | undefined>>,
+  users: ChatUsersInterface[],
+  setUsers: Dispatch<SetStateAction<ChatUsersInterface[]>>
 ) => {
-    const [messages, setMessages] = useState<WebSocketMessage[]>([]);
-    const [ws, setWs] = useState<WebSocket | null>(null);
-    const [error, setError] = useState<boolean>(false);
-    const usersRef = useRef(users);
+  const [messages, setMessages] = useState<WebSocketMessage[]>([]);
+  const [error, setError] = useState<boolean>(false);
+  const [status, setStatus] = useState<ConnectionStatus>("connecting");
 
-    useEffect(() => {
-        const connect = () => {
-            const socket = new WebSocket(url);
-            setWs(socket);
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectAllowed = useRef(true);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const attemptRef = useRef(0);
 
-            socket.onopen = () => {
-                socket.send(JSON.stringify("admin connected"));
-            };
+  // Актуальные значения держим в ref, чтобы не переподключать сокет
+  // при каждой смене выбранного пользователя.
+  const selectedUserRef = useRef(selectedUser);
+  const usersRef = useRef(users);
+  const apiRef = useRef(api);
 
-            socket.onerror = () => {
-                setError(true);
-            };
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+  useEffect(() => {
+    apiRef.current = api;
+  }, [api]);
 
-            socket.onclose = () => {
-                connect();
-            };
-        };
+  const handleIncoming = useCallback(
+    (raw: string) => {
+      let payload: WebSocketMessage;
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        return; // сервисные кадры (pong и пр.) просто игнорируем
+      }
+      if (!payload || typeof payload !== "object" || payload.id === undefined) {
+        return;
+      }
 
-        connect();
+      const chatId = payload.chat_id ?? payload.user_id;
 
-        return () => {
-            if (ws) {
-                ws.close();
-            }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url]);
+      // Сообщение в открытом чате — дописываем в ленту.
+      if (selectedUserRef.current && selectedUserRef.current === chatId) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.id)) return prev;
+          // Заменяем оптимистичную копию, если она есть.
+          const optimistic = prev.findIndex(
+            (m) => m.id < 0 && m.message === payload.message
+          );
+          if (optimistic !== -1) {
+            const next = [...prev];
+            next[optimistic] = payload;
+            return next;
+          }
+          return [...prev, payload];
+        });
+        return;
+      }
 
-    useEffect(() => {
-        usersRef.current = users;
-    }, [users]);
+      // Сообщение в другом чате — увеличиваем счётчик непрочитанных.
+      setUsers((prev) => {
+        const known = prev.some((u) => u.user_id === chatId);
+        const next = known
+          ? prev.map((u) =>
+              u.user_id === chatId
+                ? { ...u, unread_count: (u.unread_count || 0) + 1 }
+                : u
+            )
+          : [{ user_id: chatId, unread_count: 1 }, ...prev];
+        return next;
+      });
 
-    useEffect(() => {
-        if (ws) {
-            ws.onmessage = ({data}) => {
-                const userMessage: WebSocketMessage = JSON.parse(data);
-                if (selectedUser && selectedUser === userMessage.user_id) {
-                    setMessages((prevMessages) => [...prevMessages, userMessage]);
-                    setTimeout(() => scrollDown(), 500);
-                    return;
-                }
+      apiRef.current.info({
+        key: `msg-${chatId}`,
+        onClick: () => setSelectedUser({ user_id: chatId }),
+        message: `Новое сообщение от ${chatId}`,
+        description:
+          payload.message && payload.message.length > 100
+            ? payload.message.slice(0, 100) + "…"
+            : payload.message || "Вложение",
+      });
+    },
+    [setSelectedUser, setUsers]
+  );
 
-                const currentUsers = usersRef.current;
+  useEffect(() => {
+    reconnectAllowed.current = true;
 
-                const newUsers = currentUsers.map((user) => {
-                    if (user.user_id === userMessage.user_id) {
-                        return {
-                            ...user,
-                            unread_count: (user.unread_count || 0) + 1,
-                        };
-                    }
-                    return user;
-                });
-
-                const sortedUsers = sortUsersByUnreadDesc(newUsers);
-                setUsers(sortedUsers);
-
-                api.info({
-                    onClick: () => setSelectedUser({user_id: userMessage.user_id}),
-                    message: "Новое сообщение от " + userMessage.user_id,
-                    description:
-                        userMessage.message.length > 100
-                            ? userMessage.message.slice(0, 100) + "..."
-                            : userMessage.message,
-                });
-            };
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedUser, ws, api]);
-
-    const sendMessage = (message: {
-        user_id: number | undefined;
-        message: string;
-    }) => {
-        const uniqueID = generateUniqueIntKey();
-        const newMessages: WebSocketMessage[] = [
-            {
-                id: uniqueID,
-                user_id: 111,
-                message: message.message,
-                created_at: dayjs(),
-            },
-        ];
-        if (ws) {
-            ws.send(JSON.stringify(message));
-            setTimeout(() => scrollDown(), 1000);
-            setMessages((prevMessages) => [...prevMessages, ...newMessages]);
-        }
+    const clearTimers = () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      reconnectTimer.current = null;
+      heartbeatTimer.current = null;
     };
 
-    return {messages, setMessages, sendMessage, error};
+    const connect = () => {
+      if (!reconnectAllowed.current) return;
+
+      const socket = new WebSocket(url);
+      socketRef.current = socket;
+      setStatus(attemptRef.current === 0 ? "connecting" : "reconnecting");
+
+      socket.onopen = () => {
+        attemptRef.current = 0;
+        setError(false);
+        setStatus("open");
+        // Периодический кадр не даёт прокси разорвать простаивающее соединение.
+        heartbeatTimer.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "ping" }));
+          }
+        }, HEARTBEAT_INTERVAL);
+      };
+
+      socket.onmessage = ({ data }) => handleIncoming(data);
+
+      socket.onerror = () => {
+        setError(true);
+      };
+
+      socket.onclose = () => {
+        if (heartbeatTimer.current) {
+          clearInterval(heartbeatTimer.current);
+          heartbeatTimer.current = null;
+        }
+        if (!reconnectAllowed.current) return;
+
+        // Раньше здесь стоял мгновенный connect() без паузы: при недоступном
+        // сервере это давало бесконечный цикл переподключений,
+        // который нагружал и браузер, и сам сервер.
+        const delay = backoffDelay(attemptRef.current);
+        attemptRef.current += 1;
+        setStatus(attemptRef.current > 2 ? "offline" : "reconnecting");
+        reconnectTimer.current = setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+
+    return () => {
+      reconnectAllowed.current = false;
+      clearTimers();
+      const socket = socketRef.current;
+      if (socket && socket.readyState <= WebSocket.OPEN) {
+        socket.close();
+      }
+      socketRef.current = null;
+    };
+  }, [url, handleIncoming]);
+
+  const sendMessage = useCallback(
+    (message: { user_id: number | undefined; message: string }) => {
+      const socket = socketRef.current;
+      // Отправка в неоткрытый сокет бросает InvalidStateError —
+      // раньше это роняло обработчик и сообщение терялось молча.
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        apiRef.current.warning({
+          message: "Нет соединения",
+          description: "Сообщение не отправлено. Дождитесь переподключения.",
+        });
+        return false;
+      }
+      socket.send(JSON.stringify(message));
+      return true;
+    },
+    []
+  );
+
+  return { messages, setMessages, sendMessage, error, status };
 };
 
 export default useWebSocket;
-
-function generateUniqueIntKey() {
-    const time = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    return time * 1000 + random;
-}

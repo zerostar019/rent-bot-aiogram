@@ -4,12 +4,14 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "/booking",
+  base: "/booking/",
   preview: {
-    allowedHosts: ["zerostar0191.fvds.ru"],
+    allowedHosts: ["businesspochta.kazan.hlab.kz"],
+    port: 8084,
+    host: "0.0.0.0",
   },
   server: {
-    allowedHosts: ["zerostar0191.fvds.ru", "localhost"],
+    allowedHosts: ["businesspochta.kazan.hlab.kz", "localhost"],
   },
   build: {
     target: "esnext",

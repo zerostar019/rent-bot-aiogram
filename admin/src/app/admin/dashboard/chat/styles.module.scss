@@ -1,39 +1,41 @@
 .chat {
-  max-height: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
   display: grid;
-  grid-template-columns: 16rem 1fr;
+  /* dvh вместо vh: на мобильном Safari адресная строка иначе ломает высоту */
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: 20rem 1fr;
   grid-template-rows: 1fr;
   grid-template-areas: "users chat";
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
 
   &-users {
     grid-area: users;
-    max-height: 100%;
-    overflow-y: auto;
-    padding: 0.625rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.625rem;
-  }
-
-  &-users::-webkit-scrollbar {
-    display: none;
+    min-height: 0;
   }
 
   &-chat {
     grid-area: chat;
+    min-height: 0;
   }
 }
 
 @media (max-width: 1024px) {
-  .chat-mobile-users {
+  .chat-mobile-users,
+  .chat-mobile-chat {
     grid-template-columns: 1fr;
+  }
+
+  .chat-mobile-users {
     grid-template-areas: "users";
   }
 
   .chat-mobile-chat {
-    grid-template-columns: 1fr;
     grid-template-areas: "chat";
+  }
+
+  .chat-users {
+    border-right: 0;
   }
 }

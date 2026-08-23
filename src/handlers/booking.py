@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
-from utils import show_error_callback
+from utils import show_error_callback, notify_admin_error
 from database.psql_db import db
 from handlers.keyboard.kb import attach_bill_kb
 from text import create_payment_text, BILL_ATTACH_TEXT
@@ -8,12 +8,18 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import pathlib
-from bot.bot_instance import bot
+from bot.bot_instance import get_bot
 from bot.ws import manager
-from bot.bot_instance import bot
 from datetime import datetime
 from scheduler import scheduler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+def safe_filename(filename: str) -> str:
+    filename = filename.replace("..", "").replace("/", "").replace("\\", "")
+    keep = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    return "".join(c for c in filename if c in keep) or "file"
+
 
 PATH_TO_DOCUMENTS = str(pathlib.Path(__file__).resolve().parent.parent) + "/documents/"
 
@@ -41,7 +47,7 @@ async def begin_booking(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("✅ Бронирование отменено!")
         await callback.message.delete()
     except Exception as e:
-        print(e)
+        await notify_admin_error(e, "begin_booking delete")
         await show_error_callback(callback=callback)
 
 
@@ -65,9 +71,7 @@ async def process_payment(callback: CallbackQuery, state: FSMContext) -> None:
             text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
     except Exception as e:
-        await db.delete_booking_by_id(booking_id=int(booking_id))
-        scheduler.remove_job(f"{callback.message.chat.id}_job")
-        print(e)
+        await notify_admin_error(e, "process_payment")
         await show_error_callback(callback=callback)
 
 
@@ -95,7 +99,7 @@ async def start_receiving_bill(callback: CallbackQuery, state: FSMContext) -> No
         await state.set_state(Bill.bill)
     except Exception as e:
         scheduler.remove_job(f"{callback.message.chat.id}_job")
-        print(e)
+        await notify_admin_error(e, "start_receiving_bill")
         await show_error_callback(callback=callback)
 
 
@@ -103,7 +107,7 @@ async def start_receiving_bill(callback: CallbackQuery, state: FSMContext) -> No
 async def get_bill(message: Message, state: FSMContext):
     try:
         data = await state.get_data()
-        await bot.edit_message_reply_markup(
+        await get_bot().edit_message_reply_markup(
             chat_id=data["last_message"]["chat_id"],
             message_id=data["last_message"]["message_id"],
             reply_markup=None,
@@ -125,26 +129,18 @@ async def get_bill(message: Message, state: FSMContext):
         message_text += f"💸 Сумма: {amount} ₽\n\n"
         message_text += f"📍 ID пользователя: {user_id}\n\n"
         message_text += f"🔑 Тип бронирования: {rent_type}\n\n"
-        destination = PATH_TO_DOCUMENTS
-        # Проверка типа файла - документ
         file_name = ""
         file_path = ""
         if message.document is not None:
-            # Получение названия файла
-            file_name = message.document.file_name
-            # Создание полного пути до документа
-            destination += file_name
-            file_path = destination
-            # Скачивание документа
-            await bot.download(file=message.document.file_id, destination=destination)
+            file_name = safe_filename(message.document.file_name or "document")
+            file_path = PATH_TO_DOCUMENTS + file_name
+            await get_bot().download(file=message.document.file_id, destination=file_path)
         elif message.photo is not None:
-            # Скачивание файла до destination по имени unique_id
-            file_name = message.photo.pop().file_unique_id + ".jpg"
-            destination += file_name
-            file_path = destination
-            await bot.download(
+            file_name = safe_filename(message.photo[-1].file_unique_id + ".jpg")
+            file_path = PATH_TO_DOCUMENTS + file_name
+            await get_bot().download(
                 file=message.photo[-1],
-                destination=destination,
+                destination=file_path,
             )
         msg = await db.save_file_from_bot(
             file_name=file_name,
@@ -161,10 +157,10 @@ async def get_bill(message: Message, state: FSMContext):
         await manager.broadcast(data=msg)
         admins = await db.get_admins()
         for admin in admins:
-            await bot.send_message(
+            await get_bot().send_message(
                 chat_id=admin,
                 text=f"ℹ️ Новое бронирование, проверьте чат с пользователем {message.chat.id}",
             )
         await state.clear()
     except Exception as e:
-        print(e)
+        await notify_admin_error(e, "get_bill")

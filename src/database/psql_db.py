@@ -3,7 +3,8 @@ from asyncpg import Range
 from datetime import datetime, timedelta
 
 # дополнительные импорты
-from src.config import env
+from config import env
+from utils import notify_admin_error
 from typing import Union
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict
@@ -21,10 +22,14 @@ class Database:
                 password=env.DB_PASSWORD.get_secret_value(),
                 database=env.DB_NAME.get_secret_value(),
                 host=env.DB_HOST.get_secret_value(),
+                min_size=2,
+                max_size=20,
+                max_inactive_connection_lifetime=300,
+                command_timeout=30,
             )
             return True
         except Exception as e:
-            print(f"Ошибка подключения к БД: {e}")
+            await notify_admin_error(e, "connect")
             return False
 
     async def close(self):
@@ -71,7 +76,7 @@ class Database:
                     """)
                     return [dict(record) for record in data]
         except Exception as e:
-            print(f"Ошибка при получении пользователей: {e}")
+            await notify_admin_error(e, "get_users_chat")
             return None
 
     async def get_chat_by_user_id(self, user_id: int) -> Optional[List[Dict]]:
@@ -99,7 +104,7 @@ class Database:
                             msg["read_at"] = msg["read_at"].isoformat()
                     return messages
         except Exception as e:
-            print(f"Ошибка при получении чата: {e}")
+            await notify_admin_error(e, "get_chat_by_user_id")
             return None
 
     async def update_read_at(self, chat_id: int) -> bool:
@@ -116,7 +121,7 @@ class Database:
                 )
                 return True
         except Exception as e:
-            print(f"Ошибка при обновлении read_at: {e}")
+            await notify_admin_error(e, "update_read_at")
             return None
 
     async def new_rental(
@@ -172,7 +177,7 @@ class Database:
                         return result
                     return None
         except Exception as e:
-            print(f"Error creating rental: {e}")
+            await notify_admin_error(e, "new_rental")
             return None
 
     async def update_rental(
@@ -238,7 +243,7 @@ class Database:
                         return result
                     return None
         except Exception as e:
-            print(f"Error updating rental: {e}")
+            await notify_admin_error(e, "update_rental")
             return None
 
     async def get_booking_data_by_id(self, booking_id: int) -> Union[dict, None]:
@@ -263,7 +268,7 @@ class Database:
                         return data
                     return None
         except Exception as e:
-            print(f"Error getting rent data: {e}")
+            await notify_admin_error(e, "get_booking_data_by_id")
             return None
 
     async def delete_booking_by_id(self, booking_id: int) -> Union[bool, None]:
@@ -291,7 +296,7 @@ class Database:
                     else:
                         return False
         except Exception as e:
-            print(f"Error deleting rental: {e}")
+            await notify_admin_error(e, "delete_booking_by_id")
             return None
 
     async def get_booked_days(self, date_array: list) -> list:
@@ -331,7 +336,7 @@ class Database:
                         record["booked_date"].strftime("%d.%m.%Y") for record in records
                     ]
         except Exception as e:
-            print(f"Ошибка при получении занятых дней: {e}")
+            await notify_admin_error(e, "get_booked_days")
             return []
 
     async def register_user(self, telegram_id: int) -> Union[None, bool]:
@@ -347,7 +352,7 @@ class Database:
                     )
                     return True
         except Exception as e:
-            print(f"Error registering user: {e}")
+            await notify_admin_error(e, "register_user")
             return None
 
     async def check_user_registered(self, telegram_id: int) -> Union[bool, None]:
@@ -365,7 +370,7 @@ class Database:
                         return True
                     return None
         except Exception as e:
-            print(f"Error checking user: {e}")
+            await notify_admin_error(e, "check_user_registered")
             return None
 
     async def save_file_from_bot(
@@ -405,7 +410,7 @@ class Database:
                         message["read_at"] = message["read_at"].isoformat()
                     return dict(message)
         except Exception as e:
-            print(f"Error checking user: {e}")
+            await notify_admin_error(e, "save_file_from_bot")
             return None
 
     async def save_message_from_bot(
@@ -429,7 +434,7 @@ class Database:
                         message["read_at"] = message["read_at"].isoformat()
                     return dict(message)
         except Exception as e:
-            print(f"Error saving message from bot: {e}")
+            await notify_admin_error(e, "save_message_from_bot")
             return None
 
     async def save_message_from_panel(
@@ -453,7 +458,7 @@ class Database:
                         message["read_at"] = message["read_at"].isoformat()
                     return dict(message)
         except Exception as e:
-            print(f"Error saving message from panel: {e}")
+            await notify_admin_error(e, "save_message_from_panel")
             return None
 
     async def get_file_path(self, file_id: int) -> Union[str, None]:
@@ -468,8 +473,24 @@ class Database:
                     )
                     return dict(file_path)
         except Exception as e:
-            print(f"Error fetching file_path: {e}")
+            await notify_admin_error(e, "get_file_path")
             return None
+
+    async def add_admin(self, user_id: int) -> bool:
+        try:
+            async with self.acquire_connection() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        INSERT INTO admins (user_id) VALUES ($1)
+                        ON CONFLICT (user_id) DO NOTHING;
+                        """,
+                        user_id,
+                    )
+                    return True
+        except Exception as e:
+            await notify_admin_error(e, "add_admin")
+            return False
 
     async def get_admins(self) -> Union[str, None]:
         try:
@@ -482,7 +503,7 @@ class Database:
                     )
                     return list(dict(admin)["user_id"] for admin in admins)
         except Exception as e:
-            print(f"Error fetching file_path: {e}")
+            await notify_admin_error(e, "get_admins")
             return None
 
     def serialize_record(self, record):
@@ -521,7 +542,7 @@ class Database:
                         "total": total,
                     }
         except Exception as e:
-            print(f"Error fetching bookings: {e}")
+            await notify_admin_error(e, "get_bookings")
             return None
 
     async def update_rental_status(
@@ -554,7 +575,7 @@ class Database:
                         return dict(result)
                     return None
         except Exception as e:
-            print(f"Error updating rental status: {e}")
+            await notify_admin_error(e, "update_rental_status")
             return None
 
     async def get_blocked_days(
@@ -625,7 +646,7 @@ class Database:
                         return result
                     return None
         except Exception as e:
-            print(f"Error fetching bookings: {e}")
+            await notify_admin_error(e, "get_field_text")
             return None
 
     async def update_field_text(self, field_name: str, field_text: str) -> any:
@@ -643,7 +664,7 @@ class Database:
                 )
                 return True
         except Exception as e:
-            print(f"Ошибка при обновлении field_text: {e}")
+            await notify_admin_error(e, "update_field_text")
             return None
 
 

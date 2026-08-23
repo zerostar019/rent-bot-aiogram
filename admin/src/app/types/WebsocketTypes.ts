@@ -13,4 +13,5 @@ export interface WebSocketMessage {
     };
     booking_id?: number;
     approved?: boolean;
+    chat_id?: number;
 }

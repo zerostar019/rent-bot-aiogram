@@ -1,1 +1,1 @@
-export const BACKEND_URL = "https://zerostar0191.fvds.ru/app";
+export const BACKEND_URL = "https://businesspochta.kazan.hlab.kz/app";

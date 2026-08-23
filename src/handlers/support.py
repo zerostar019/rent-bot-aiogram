@@ -9,7 +9,8 @@ from aiogram.types import (
 from handlers.keyboard.kb import help_menu, return_to_menu, return_to_help_menu
 from bot.ws import manager
 from database.psql_db import db
-from bot.bot_instance import bot
+from bot.bot_instance import get_bot
+from utils import escape_html, notify_admin_error, notify_admins
 from constants import (
     APARTMENT_ADDRESS,
     SUPPORT_TEXT,
@@ -17,10 +18,17 @@ from constants import (
     REQUISITES_TEXT,
     SHOW_INFO_TEXT,
 )
-import pathlib
 import asyncio
+import pathlib
 
 PATH_TO_DOCUMENTS = str(pathlib.Path(__file__).resolve().parent.parent) + "/documents/"
+
+
+def safe_filename(filename: str) -> str:
+    filename = filename.replace("..", "").replace("/", "").replace("\\", "")
+    keep = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    return "".join(c for c in filename if c in keep) or "file"
+
 
 support = Router()
 
@@ -29,7 +37,7 @@ chat_button = [
         InlineKeyboardButton(
             text="💬 Чаты",
             web_app=WebAppInfo(
-                url="https://zerostar0191.fvds.ru/admin/admin/dashboard/chat"
+                url="https://businesspochta.kazan.hlab.kz/admin/admin/dashboard/chat"
             ),
         )
     ],
@@ -71,52 +79,44 @@ async def call_manager(callback: CallbackQuery):
 @support.message(F.content_type.in_({"text"}))
 async def process_chatting_with_admin(message: Message):
     try:
+        user_text = message.text.strip()
         msg = await db.save_message_from_bot(
-            message_text=message.text.strip(), user_id=message.chat.id
+            message_text=user_text, user_id=message.chat.id
         )
         admins = await db.get_admins()
-        if admins is not None and len(admins) > 0:
-            for admin in admins:
-                await bot.send_message(
-                    text=f"Новое сообщение от {message.chat.id}: \n\n{message.text.strip()}",
-                    chat_id=int(admin),
-                    parse_mode="HTML",
-                    reply_markup=chat_keyboard
-                )
-                await asyncio.sleep(1)
-        await manager.broadcast(data=msg)
+        notify_text = (
+            f"Новое сообщение от {message.chat.id}: \n\n{escape_html(user_text)}"
+        )
+        # Рассылка админам и обновление панели идут параллельно:
+        # обработчик webhook больше не ждёт по секунде на каждого админа.
+        await asyncio.gather(
+            notify_admins(admins, notify_text, reply_markup=chat_keyboard),
+            manager.broadcast(data=msg),
+        )
     except Exception as e:
-        print(e)
+        await notify_admin_error(e, "process_chatting_with_admin")
 
 
-@support.message(F.content_type.in_({"document", "photo", "text"}))
+@support.message(F.content_type.in_({"document", "photo"}))
 async def get_photo_or_document(message: Message):
     try:
         message_text = ""
         if message.caption is not None:
             message_text = message.caption
-        destination = PATH_TO_DOCUMENTS
-        # Проверка типа файла - документ
         file_name = ""
         file_path = ""
         if message.document is not None:
-            # Получение названия файла
-            file_name = message.document.file_name
-            # Создание полного пути до документа
-            destination += file_name
-            file_path = destination
-            # Скачивание документа
-            await bot.download(file=message.document.file_id, destination=destination)
+            file_name = safe_filename(message.document.file_name or "document")
+            file_path = PATH_TO_DOCUMENTS + file_name
+            await get_bot().download(file=message.document.file_id, destination=file_path)
         elif message.photo is not None:
-            # Скачивание файла до destination по имени unique_id
-            file_name = message.photo.pop().file_unique_id + ".jpg"
-            destination += file_name
-            file_path = destination
-            await bot.download(
+            file_name = safe_filename(message.photo[-1].file_unique_id + ".jpg")
+            file_path = PATH_TO_DOCUMENTS + file_name
+            await get_bot().download(
                 file=message.photo[-1],
-                destination=destination,
+                destination=file_path,
             )
-        message = await db.save_file_from_bot(
+        saved = await db.save_file_from_bot(
             file_name=file_name,
             file_path=file_path,
             user_id=message.chat.id,
@@ -124,15 +124,12 @@ async def get_photo_or_document(message: Message):
             message_text=message_text,
         )
         admins = await db.get_admins()
-        if admins is not None and len(admins) > 0:
-            for admin in admins:
-                await bot.send_message(
-                    text=f"Новое сообщение от {message.chat.id}",
-                    chat_id=int(admin),
-                    parse_mode="HTML",
-                    reply_markup=chat_keyboard,
-                )
-                await asyncio.sleep(1)
-        await manager.broadcast(data=message)
+        notify_text = f"Новое сообщение от {message.chat.id}"
+        if message_text:
+            notify_text += f":\n\n{escape_html(message_text)}"
+        await asyncio.gather(
+            notify_admins(admins, notify_text, reply_markup=chat_keyboard),
+            manager.broadcast(data=saved),
+        )
     except Exception as e:
-        print(e)
+        await notify_admin_error(e, "get_photo_or_document")
