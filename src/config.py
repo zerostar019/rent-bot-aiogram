@@ -17,6 +17,7 @@ class Environment(BaseSettings):
     PASSWORD: SecretStr
     DB: SecretStr
     PROXY: str | None = None
+    WEBHOOK_SECRET: SecretStr | None = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: SecretStr | None = None

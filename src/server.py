@@ -28,7 +28,7 @@ from config import env
 from handlers.start import start
 from handlers.keyboard.kb import create_finish_booking_kb
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Annotated
 
 
@@ -38,6 +38,9 @@ import shutil
 import pathlib
 from aiogram.fsm.strategy import FSMStrategy
 from utils import escape_html, notify_admin_error
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BookingBody(BaseModel):
@@ -77,10 +80,18 @@ async def lifespan(app: FastAPI):
     await create_bot()
     scheduler.start()
     await db.connect()
+    # secret_token заставляет Telegram присылать заголовок
+    # X-Telegram-Bot-Api-Secret-Token. Без него эндпоинт вебхука публичный:
+    # любой мог отправить туда поддельный Update от имени чужого user_id.
     await get_bot().set_webhook(
         url=str(env.HOST.get_secret_value()) + BOT_PATH,
         allowed_updates=["callback_query", "message"],
         drop_pending_updates=True,
+        secret_token=(
+            env.WEBHOOK_SECRET.get_secret_value()
+            if env.WEBHOOK_SECRET is not None
+            else None
+        ),
     )
     yield
 
@@ -110,12 +121,38 @@ app.add_middleware(
 
 @app.post("/app" + BOT_PATH)
 async def process_bot_updates(request: Request):
+    # 1. Проверка подлинности. Чужой запрос отбрасываем молча:
+    #    эндпоинт открыт в интернет и его постоянно сканируют.
+    if env.WEBHOOK_SECRET is not None:
+        provided = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if provided != env.WEBHOOK_SECRET.get_secret_value():
+            logger.warning(
+                "Отклонён webhook без валидного секрета (client=%s)",
+                request.client.host if request.client else "unknown",
+            )
+            return JSONResponse(status_code=403, content={"ok": False})
+
+    # 2. Разбор тела. Некорректный payload — это мусор от сканеров,
+    #    а не сбой бота, поэтому логируем, но не шлём админу в Telegram
+    #    (иначе каждый мусорный POST превращается в уведомление).
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"ok": False})
+
     try:
         bot = get_bot()
-        update = Update.model_validate(await request.json(), context={"bot": bot})
+        update = Update.model_validate(payload, context={"bot": bot})
+    except ValidationError as e:
+        logger.warning("Некорректный Update в вебхуке: %s", e)
+        return JSONResponse(status_code=400, content={"ok": False})
+
+    # 3. Ошибка уже внутри обработки апдейта — настоящая проблема бота.
+    try:
         await dp.feed_update(bot=bot, update=update)
     except Exception as e:
         await notify_admin_error(e, "process_bot_updates")
+    return JSONResponse({"ok": True})
 
 
 @app.websocket("/app/chat")
