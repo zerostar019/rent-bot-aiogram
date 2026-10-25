@@ -6,7 +6,12 @@ from aiogram.fsm.context import FSMContext
 from bot.redis_instance import redis
 
 from handlers.booking import booking
-from utils import show_error_callback, show_error_message, notify_admin_error
+from utils import (
+    delete_message_safely,
+    show_error_callback,
+    show_error_message,
+    notify_admin_error,
+)
 
 # Support
 from handlers.support import support
@@ -62,7 +67,7 @@ async def return_to_menu(callback: CallbackQuery, state: FSMContext):
     try:
         await callback.answer()
         await state.clear()
-        await callback.message.delete()
+        await delete_message_safely(callback.message)
         await start_bot(callback.message, state)
     except Exception as e:
         await notify_admin_error(e, "return_to_menu")

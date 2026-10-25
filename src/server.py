@@ -163,8 +163,6 @@ async def process_chat_messages(websocket: WebSocket):
             data = await websocket.receive_json()
             if "user_id" not in data:
                 continue
-            # Ошибка по одному адресату не должна рвать сокет панели целиком:
-            # раньше любой заблокировавший бота пользователь закрывал админу чат.
             try:
                 chat_id = int(data["user_id"])
                 admin_text = str(data.get("message", ""))
@@ -173,18 +171,31 @@ async def process_chat_messages(websocket: WebSocket):
                 )
                 await manager.broadcast(data=message)
                 text = "<b>Администратор:</b>\n\n" + escape_html(admin_text)
-                await get_bot().send_message(
-                    chat_id=chat_id, text=text, parse_mode="HTML"
-                )
-            except TelegramForbiddenError as e:
-                await notify_admin_error(
-                    e, "WebSocket: пользователь заблокировал бота"
-                )
-                blocked = await db.save_message_from_bot(
-                    message_text="Пользователь заблокировал бота!",
-                    user_id=int(data["user_id"]),
-                )
-                await manager.broadcast(data=blocked)
+                try:
+                    await get_bot().send_message(
+                        chat_id=chat_id, text=text, parse_mode="HTML"
+                    )
+                except TelegramForbiddenError:
+                    # Блокировка бота — ожидаемое состояние, а не сбой приложения.
+                    # Показываем её в чате панели без traceback-уведомления в Telegram.
+                    logger.info("Пользователь %s заблокировал бота", chat_id)
+                    delivery_error = await db.save_message_from_bot(
+                        message_text="⚠️ Сообщение не доставлено: пользователь заблокировал бота.",
+                        user_id=chat_id,
+                    )
+                    if delivery_error is not None:
+                        await manager.broadcast(data=delivery_error)
+                except Exception as e:
+                    # Ошибки Telegram-доставки тоже видны в нужном чате,
+                    # а детали остаются в журнале контейнера.
+                    logger.exception("Не удалось доставить сообщение пользователю %s", chat_id)
+                    error_text = str(e).strip() or type(e).__name__
+                    delivery_error = await db.save_message_from_bot(
+                        message_text=f"⚠️ Сообщение не доставлено: {error_text[:500]}",
+                        user_id=chat_id,
+                    )
+                    if delivery_error is not None:
+                        await manager.broadcast(data=delivery_error)
             except Exception as e:
                 await notify_admin_error(e, "WebSocket: отправка сообщения")
     except WebSocketDisconnect:

@@ -1,29 +1,44 @@
 from aiogram.types import CallbackQuery, Message
+from aiogram.exceptions import TelegramAPIError
 from constants import ERROR_TEXT
 from handlers.keyboard.kb import return_to_menu
 import asyncio
 import html
-import traceback
+import logging
 from typing import Any, Iterable, Optional
 
 
-ADMIN_ID = 6578730263
+logger = logging.getLogger(__name__)
 
 
 async def notify_admin_error(error: Exception, context: str = "") -> None:
+    """Сохраняет техническую ошибку в журнале контейнера.
+
+    Ошибки больше не отправляются в Telegram-чат: в чате должны быть
+    только рабочие сообщения, а traceback остаётся для диагностики на сервере.
+    """
+    logger.error(
+        "Ошибка в боте (context=%s): %s: %s",
+        context or "unknown",
+        type(error).__name__,
+        error,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+
+
+async def delete_message_safely(message: Message) -> bool:
+    """Удаляет сообщение, но не прерывает сценарий из-за ограничений Telegram."""
     try:
-        from bot.bot_instance import get_bot
-        bot = get_bot()
-        tb = "".join(traceback.format_exception(type(error), error, error.__traceback__))
-        text = f"<b>🚨 Ошибка в боте</b>\n\n"
-        if context:
-            text += f"<b>Контекст:</b> {context}\n\n"
-        text += f"<b>Тип:</b> {type(error).__name__}\n"
-        text += f"<b>Текст:</b> {error}\n\n"
-        text += f"<b>Traceback:</b>\n<pre>{tb[:3500]}</pre>"
-        await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
-    except Exception:
-        pass
+        await message.delete()
+        return True
+    except TelegramAPIError as error:
+        logger.info(
+            "Telegram не удалил сообщение chat_id=%s message_id=%s: %s",
+            getattr(getattr(message, "chat", None), "id", "unknown"),
+            getattr(message, "message_id", "unknown"),
+            error,
+        )
+        return False
 
 
 async def show_error_callback(callback: CallbackQuery) -> None:

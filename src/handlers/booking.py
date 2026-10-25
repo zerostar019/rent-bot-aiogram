@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
-from utils import show_error_callback, notify_admin_error
+from utils import delete_message_safely, show_error_callback, notify_admin_error
 from database.psql_db import db
 from handlers.keyboard.kb import attach_bill_kb
 from text import create_payment_text, BILL_ATTACH_TEXT
@@ -45,7 +45,7 @@ async def begin_booking(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer("🚩 Ошибка при отмене бронирования!")
             return
         await callback.answer("✅ Бронирование отменено!")
-        await callback.message.delete()
+        await delete_message_safely(callback.message)
     except Exception as e:
         await notify_admin_error(e, "begin_booking delete")
         await show_error_callback(callback=callback)
